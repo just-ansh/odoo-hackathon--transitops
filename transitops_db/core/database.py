@@ -588,13 +588,15 @@ def add_expense(
 def get_fleet_roi(conn_string: str = CONN_STRING) -> Dict[str, Any]:
     """
     Returns a single aggregate row of fleet-wide ROI metrics.
-    ROI = (Revenue - (Maintenance Costs + Fuel Costs)) / Total Acquisition Cost
+    ROI = (Revenue - (Maintenance Costs + Fuel Costs + Other Expenses)) / Total Acquisition Cost
     """
     query = """
         SELECT
             COALESCE(SUM(t.revenue), 0)                                   AS total_revenue,
-            COALESCE((SELECT SUM(cost) FROM maintenance_logs), 0)         AS total_maintenance_cost,
+            COALESCE((SELECT SUM(cost) FROM maintenance_logs), 0) +
+            COALESCE((SELECT SUM(amount) FROM expenses WHERE type = 'Maintenance'), 0) AS total_maintenance_cost,
             COALESCE((SELECT SUM(cost) FROM fuel_logs), 0)                AS total_fuel_cost,
+            COALESCE((SELECT SUM(amount) FROM expenses WHERE type != 'Maintenance'), 0) AS total_other_expense_cost,
             COALESCE((SELECT SUM(acquisition_cost) FROM vehicles), 0)     AS total_acquisition_cost,
             CASE
                 WHEN COALESCE((SELECT SUM(acquisition_cost) FROM vehicles), 0) = 0 THEN 0.0
@@ -603,7 +605,9 @@ def get_fleet_roi(conn_string: str = CONN_STRING) -> Dict[str, Any]:
                         COALESCE(SUM(t.revenue), 0) -
                         (
                             COALESCE((SELECT SUM(cost) FROM maintenance_logs), 0) +
-                            COALESCE((SELECT SUM(cost) FROM fuel_logs), 0)
+                            COALESCE((SELECT SUM(amount) FROM expenses WHERE type = 'Maintenance'), 0) +
+                            COALESCE((SELECT SUM(cost) FROM fuel_logs), 0) +
+                            COALESCE((SELECT SUM(amount) FROM expenses WHERE type != 'Maintenance'), 0)
                         )
                     ) / COALESCE((SELECT SUM(acquisition_cost) FROM vehicles), 0),
                     4
@@ -620,6 +624,7 @@ def get_fleet_roi(conn_string: str = CONN_STRING) -> Dict[str, Any]:
                 "total_revenue": 0.0,
                 "total_maintenance_cost": 0.0,
                 "total_fuel_cost": 0.0,
+                "total_other_expense_cost": 0.0,
                 "total_acquisition_cost": 0.0,
                 "fleet_roi": 0.0
             }
@@ -633,7 +638,7 @@ def get_vehicle_roi_breakdown(conn_string: str = CONN_STRING) -> List[Dict[str, 
     """
     Returns ROI metrics broken down per vehicle using pre-aggregated subqueries
     to avoid cross-join row multiplication.
-    ROI = (Revenue - (Maintenance Costs + Fuel Costs)) / Acquisition Cost
+    ROI = (Revenue - (Maintenance Costs + Fuel Costs + Other Expenses)) / Acquisition Cost
     """
     query = """
         SELECT
@@ -643,14 +648,20 @@ def get_vehicle_roi_breakdown(conn_string: str = CONN_STRING) -> List[Dict[str, 
             v.type,
             v.acquisition_cost,
             COALESCE(r.total_revenue, 0)                AS total_revenue,
-            COALESCE(m.total_maintenance, 0)            AS total_maintenance,
+            (COALESCE(m.total_maintenance, 0) + COALESCE(e.maintenance_expenses, 0)) AS total_maintenance,
             COALESCE(f.total_fuel, 0)                   AS total_fuel,
+            COALESCE(e.other_expenses, 0)               AS total_other_expense,
             CASE
                 WHEN v.acquisition_cost = 0 THEN 0.0
                 ELSE ROUND(
                     (
                         COALESCE(r.total_revenue, 0) -
-                        (COALESCE(m.total_maintenance, 0) + COALESCE(f.total_fuel, 0))
+                        (
+                            COALESCE(m.total_maintenance, 0) + 
+                            COALESCE(e.maintenance_expenses, 0) + 
+                            COALESCE(f.total_fuel, 0) + 
+                            COALESCE(e.other_expenses, 0)
+                        )
                     ) / v.acquisition_cost,
                     4
                 )
@@ -671,6 +682,13 @@ def get_vehicle_roi_breakdown(conn_string: str = CONN_STRING) -> List[Dict[str, 
             FROM fuel_logs
             GROUP BY vehicle_id
         ) f ON f.vehicle_id = v.id
+        LEFT JOIN (
+            SELECT vehicle_id,
+                   SUM(CASE WHEN type = 'Maintenance' THEN amount ELSE 0 END) AS maintenance_expenses,
+                   SUM(CASE WHEN type != 'Maintenance' THEN amount ELSE 0 END) AS other_expenses
+            FROM expenses
+            GROUP BY vehicle_id
+        ) e ON e.vehicle_id = v.id
         ORDER BY roi DESC NULLS LAST, v.id ASC;
     """
     with get_connection(conn_string) as conn:

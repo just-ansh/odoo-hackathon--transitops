@@ -21,6 +21,7 @@ import {
   YAxis,
 } from 'recharts';
 import {
+  getExpenses,
   getFleetRoi,
   getFuelLogs,
   getMaintenanceLogs,
@@ -28,7 +29,7 @@ import {
   getVehicleRoiBreakdown,
   getVehicles,
 } from '@/lib/api';
-import type { FuelLog, MaintenanceLog, Trip, Vehicle } from '@/types';
+import type { FuelLog, MaintenanceLog, Trip, Vehicle, Expense } from '@/types';
 import { Download, TrendingUp, Gauge, DollarSign, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -36,6 +37,7 @@ interface FleetRoi {
   revenue: number;
   fuel_cost: number;
   maintenance_cost: number;
+  other_expense: number;
   acquisition_cost: number;
   roi: number;
   fuel_efficiency: number;
@@ -48,6 +50,7 @@ interface VehicleRoiRow {
   revenue: number;
   fuel_cost: number;
   maintenance_cost: number;
+  other_expense: number;
   acquisition_cost: number;
   roi: number;
 }
@@ -63,11 +66,12 @@ export default function ReportsPage() {
 
   useEffect(() => {
     (async () => {
-      const [vs, ts, fs, ms] = await Promise.all([
+      const [vs, ts, fs, ms, ex] = await Promise.all([
         getVehicles().catch(() => []),
         getTrips().catch(() => []),
         getFuelLogs().catch(() => []),
         getMaintenanceLogs().catch(() => []),
+        getExpenses().catch(() => []),
       ]);
       const vehiclesData: Vehicle[] = Array.isArray(vs) ? vs : (vs as any)?.data ?? [];
       setVehicles(vehiclesData);
@@ -82,6 +86,7 @@ export default function ReportsPage() {
             revenue: Number(metrics.total_revenue),
             fuel_cost: Number(metrics.total_fuel_cost),
             maintenance_cost: Number(metrics.total_maintenance_cost),
+            other_expense: Number(metrics.total_other_expense_cost ?? 0),
             acquisition_cost: Number(metrics.total_acquisition_cost),
             roi: Number(metrics.fleet_roi),
             fuel_efficiency: 0,
@@ -100,8 +105,9 @@ export default function ReportsPage() {
             registration_number: b.registration_number,
             name_model: b.name_model,
             revenue: Number(b.total_revenue),
-            fuel_cost: Number(b.total_fuel),
-            maintenance_cost: Number(b.total_maintenance),
+            fuel_cost: Number(b.total_fuel_cost),
+            maintenance_cost: Number(b.total_maintenance_cost),
+            other_expense: Number(b.total_other_expense ?? 0),
             acquisition_cost: Number(b.acquisition_cost),
             roi: Number(b.roi),
           }));
@@ -114,13 +120,17 @@ export default function ReportsPage() {
       const tripsData: Trip[] = Array.isArray(ts) ? ts : (ts as any)?.data ?? [];
       const fuelData: FuelLog[] = Array.isArray(fs) ? fs : (fs as any)?.data ?? [];
       const maintData: MaintenanceLog[] = Array.isArray(ms) ? ms : (ms as any)?.data ?? [];
+      const expensesData: Expense[] = Array.isArray(ex) ? ex : (ex as any)?.data ?? [];
 
       if (!fleetData) {
         const revenue = tripsData
           .filter((t) => t.status === 'Completed')
           .reduce((s, t) => s + (t.revenue ?? 0), 0);
         const fuel_cost = fuelData.reduce((s, f) => s + f.cost, 0);
-        const maintenance_cost = maintData.reduce((s, m) => s + (m.cost ?? 0), 0);
+        const maint_log_cost = maintData.reduce((s, m) => s + (m.cost ?? 0), 0);
+        const maint_exp_cost = expensesData.filter((e) => e.type === 'Maintenance').reduce((s, e) => s + e.amount, 0);
+        const maintenance_cost = maint_log_cost + maint_exp_cost;
+        const other_expense = expensesData.filter((e) => e.type !== 'Maintenance').reduce((s, e) => s + e.amount, 0);
         const acquisition_cost = vehiclesData.reduce((s, v) => s + v.acquisition_cost, 0);
         const completed = tripsData.filter(
           (t) => t.status === 'Completed' && t.fuel_consumed_liters,
@@ -134,8 +144,9 @@ export default function ReportsPage() {
           revenue,
           fuel_cost,
           maintenance_cost,
+          other_expense,
           acquisition_cost,
-          roi: safeDiv(revenue - fuel_cost - maintenance_cost, acquisition_cost),
+          roi: safeDiv(revenue - fuel_cost - maintenance_cost - other_expense, acquisition_cost),
           fuel_efficiency: safeDiv(dist, liters),
           fleet_utilization: safeDiv(
             vehiclesData.filter((v) => v.status === 'On Trip').length,
@@ -150,15 +161,18 @@ export default function ReportsPage() {
             .reduce((s, t) => s + t.revenue, 0);
           const fc = fuelData.filter((f) => f.vehicle_id === v.id).reduce((s, f) => s + f.cost, 0);
           const mc = maintData.filter((m) => m.vehicle_id === v.id).reduce((s, m) => s + m.cost, 0);
+          const me = expensesData.filter((e) => e.vehicle_id === v.id && e.type === 'Maintenance').reduce((s, e) => s + e.amount, 0);
+          const oe = expensesData.filter((e) => e.vehicle_id === v.id && e.type !== 'Maintenance').reduce((s, e) => s + e.amount, 0);
           return {
             vehicle_id: v.id,
             registration_number: v.registration_number,
             name_model: v.name_model,
             revenue: rev,
             fuel_cost: fc,
-            maintenance_cost: mc,
+            maintenance_cost: mc + me,
+            other_expense: oe,
             acquisition_cost: v.acquisition_cost,
-            roi: safeDiv(rev - fc - mc, v.acquisition_cost),
+            roi: safeDiv(rev - fc - (mc + me) - oe, v.acquisition_cost),
           };
         });
       }
@@ -187,6 +201,7 @@ export default function ReportsPage() {
       'Revenue',
       'Fuel Cost',
       'Maintenance Cost',
+      'Other Expenses',
       'Operational Cost',
       'Acquisition Cost',
       'ROI %',
@@ -197,7 +212,8 @@ export default function ReportsPage() {
       r.revenue.toFixed(2),
       r.fuel_cost.toFixed(2),
       r.maintenance_cost.toFixed(2),
-      (r.fuel_cost + r.maintenance_cost).toFixed(2),
+      r.other_expense.toFixed(2),
+      (r.fuel_cost + r.maintenance_cost + r.other_expense).toFixed(2),
       r.acquisition_cost.toFixed(2),
       (r.roi * 100).toFixed(2),
     ]);
@@ -207,7 +223,8 @@ export default function ReportsPage() {
       fleet.revenue.toFixed(2),
       fleet.fuel_cost.toFixed(2),
       fleet.maintenance_cost.toFixed(2),
-      (fleet.fuel_cost + fleet.maintenance_cost).toFixed(2),
+      fleet.other_expense.toFixed(2),
+      (fleet.fuel_cost + fleet.maintenance_cost + fleet.other_expense).toFixed(2),
       fleet.acquisition_cost.toFixed(2),
       (fleet.roi * 100).toFixed(2),
     ];
@@ -269,10 +286,10 @@ export default function ReportsPage() {
         />
         <SummaryCard
           label="Operational Cost"
-          value={fleet ? `$${(fleet.fuel_cost + fleet.maintenance_cost).toLocaleString()}` : '—'}
+          value={fleet ? `$${(fleet.fuel_cost + fleet.maintenance_cost + fleet.other_expense).toLocaleString()}` : '—'}
           icon={DollarSign}
           accent="from-rose-500 to-red-600"
-          hint="Fuel + Maintenance"
+          hint="Fuel + Maint. + Expenses"
         />
         <SummaryCard
           label="Gross Revenue"
@@ -320,6 +337,7 @@ export default function ReportsPage() {
                 <Row label="Revenue" value={fleet.revenue} tone="text-emerald-600" />
                 <Row label="Fuel" value={fleet.fuel_cost} tone="text-indigo-600" />
                 <Row label="Maintenance" value={fleet.maintenance_cost} tone="text-amber-600" />
+                <Row label="Other Expenses" value={fleet.other_expense} tone="text-purple-600" />
                 <Row label="Acquisition" value={fleet.acquisition_cost} tone="text-slate-600" />
                 <div className="mt-2 rounded-lg bg-gradient-to-br from-indigo-500/10 to-violet-500/5 p-3">
                   <div className="text-xs uppercase tracking-widest text-slate-500">
@@ -330,7 +348,8 @@ export default function ReportsPage() {
                     {(
                       fleet.revenue -
                       fleet.fuel_cost -
-                      fleet.maintenance_cost
+                      fleet.maintenance_cost -
+                      fleet.other_expense
                     ).toLocaleString()}
                   </div>
                 </div>
@@ -357,6 +376,7 @@ export default function ReportsPage() {
                   <TableHead>Revenue</TableHead>
                   <TableHead>Fuel</TableHead>
                   <TableHead>Maintenance</TableHead>
+                  <TableHead>Other Expenses</TableHead>
                   <TableHead>Operational Cost</TableHead>
                   <TableHead>Acquisition</TableHead>
                   <TableHead>ROI</TableHead>
@@ -365,7 +385,7 @@ export default function ReportsPage() {
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="py-10 text-center text-sm text-slate-500">
+                    <TableCell colSpan={9} className="py-10 text-center text-sm text-slate-500">
                       No data available yet.
                     </TableCell>
                   </TableRow>
@@ -388,7 +408,8 @@ export default function ReportsPage() {
                       <TableCell>${r.revenue.toLocaleString()}</TableCell>
                       <TableCell>${r.fuel_cost.toLocaleString()}</TableCell>
                       <TableCell>${r.maintenance_cost.toLocaleString()}</TableCell>
-                      <TableCell className="font-semibold">${(r.fuel_cost + r.maintenance_cost).toLocaleString()}</TableCell>
+                      <TableCell>${r.other_expense.toLocaleString()}</TableCell>
+                      <TableCell className="font-semibold">${(r.fuel_cost + r.maintenance_cost + r.other_expense).toLocaleString()}</TableCell>
                       <TableCell>${r.acquisition_cost.toLocaleString()}</TableCell>
                       <TableCell
                         className={
