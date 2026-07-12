@@ -52,14 +52,23 @@ import { toast } from 'sonner';
 const VEHICLE_TYPES = ['Truck', 'Van', 'Trailer', 'Refrigerated', 'Tanker'];
 const STATUSES: Vehicle['status'][] = ['Available', 'On Trip', 'In Shop', 'Retired'];
 
-type FormState = Omit<Vehicle, 'id'>;
+type FormState = {
+  registration_number: string;
+  name_model: string;
+  type: string;
+  max_load_capacity: string;
+  odometer: string;
+  acquisition_cost: string;
+  status: Vehicle['status'];
+  region: string;
+};
 const emptyForm: FormState = {
   registration_number: '',
   name_model: '',
   type: 'Truck',
-  max_load_capacity: 0,
-  odometer: 0,
-  acquisition_cost: 0,
+  max_load_capacity: '',
+  odometer: '',
+  acquisition_cost: '',
   status: 'Available',
   region: '',
 };
@@ -118,8 +127,16 @@ export default function VehiclesPage() {
   };
   const openEdit = (v: Vehicle) => {
     setEditing(v);
-    const { id: _id, ...rest } = v;
-    setForm(rest);
+    setForm({
+      registration_number: v.registration_number,
+      name_model: v.name_model,
+      type: v.type,
+      max_load_capacity: String(v.max_load_capacity),
+      odometer: String(v.odometer),
+      acquisition_cost: String(v.acquisition_cost),
+      status: v.status,
+      region: v.region ?? '',
+    });
     setDialogOpen(true);
   };
   const submit = async () => {
@@ -131,15 +148,18 @@ export default function VehiclesPage() {
       toast.error('Name / Model must be at least 2 characters.');
       return;
     }
-    if (form.max_load_capacity <= 0) {
+    const maxLoad = parseFloat(form.max_load_capacity as string);
+    const odometer = parseFloat(form.odometer as string);
+    const acqCost = parseFloat(form.acquisition_cost as string);
+    if (isNaN(maxLoad) || maxLoad <= 0) {
       toast.error('Max load capacity must be greater than 0 kg.');
       return;
     }
-    if (form.odometer < 0) {
+    if (isNaN(odometer) || odometer < 0) {
       toast.error('Odometer reading cannot be negative.');
       return;
     }
-    if (form.acquisition_cost <= 0) {
+    if (isNaN(acqCost) || acqCost <= 0) {
       toast.error('Acquisition cost must be greater than $0.');
       return;
     }
@@ -147,12 +167,18 @@ export default function VehiclesPage() {
       toast.error('Operational region must be at least 2 characters.');
       return;
     }
+    const payload = {
+      ...form,
+      max_load_capacity: maxLoad,
+      odometer: odometer,
+      acquisition_cost: acqCost,
+    };
     try {
       if (editing) {
-        await updateVehicle(editing.id, form);
+        await updateVehicle(editing.id, payload);
         toast.success('Vehicle updated');
       } else {
-        await createVehicle(form);
+        await createVehicle(payload);
         toast.success('Vehicle created');
       }
       setDialogOpen(false);
@@ -381,7 +407,7 @@ export default function VehiclesPage() {
                 type="number"
                 value={form.max_load_capacity}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, max_load_capacity: Number(e.target.value) }))
+                  setForm((f) => ({ ...f, max_load_capacity: e.target.value }))
                 }
               />
             </div>
@@ -390,7 +416,7 @@ export default function VehiclesPage() {
               <Input
                 type="number"
                 value={form.odometer}
-                onChange={(e) => setForm((f) => ({ ...f, odometer: Number(e.target.value) }))}
+                onChange={(e) => setForm((f) => ({ ...f, odometer: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -399,7 +425,7 @@ export default function VehiclesPage() {
                 type="number"
                 value={form.acquisition_cost}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, acquisition_cost: Number(e.target.value) }))
+                  setForm((f) => ({ ...f, acquisition_cost: e.target.value }))
                 }
               />
             </div>

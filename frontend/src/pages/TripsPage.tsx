@@ -57,18 +57,18 @@ interface TripFormState {
   destination: string;
   vehicle_id: number | null;
   driver_id: number | null;
-  cargo_weight: number;
-  planned_distance: number;
-  revenue: number;
+  cargo_weight: string;
+  planned_distance: string;
+  revenue: string;
 }
 const emptyTrip: TripFormState = {
   source: '',
   destination: '',
   vehicle_id: null,
   driver_id: null,
-  cargo_weight: 0,
-  planned_distance: 0,
-  revenue: 0,
+  cargo_weight: '',
+  planned_distance: '',
+  revenue: '',
 };
 
 const isDriverLicenseExpired = (d: Driver) => new Date(d.license_expiry_date) < new Date();
@@ -87,7 +87,7 @@ export default function TripsPage() {
   const [form, setForm] = useState<TripFormState>(emptyTrip);
 
   const [completeTripState, setCompleteTripState] = useState<Trip | null>(null);
-  const [completeForm, setCompleteForm] = useState({ final_odometer: 0, fuel_consumed_liters: 0 });
+  const [completeForm, setCompleteForm] = useState({ final_odometer: '' as string, fuel_consumed_liters: '' as string });
 
   const load = () => {
     Promise.all([getTrips(), getVehicles(), getDrivers()])
@@ -110,8 +110,9 @@ export default function TripsPage() {
   const selectedVehicle = form.vehicle_id ? vehiclesById.get(form.vehicle_id) ?? null : null;
   const selectedDriver = form.driver_id ? driversById.get(form.driver_id) ?? null : null;
   const licenseWarning = selectedDriver && isDriverLicenseExpired(selectedDriver);
+  const cargoNum = parseFloat(form.cargo_weight as string);
   const overCapacity =
-    selectedVehicle && form.cargo_weight > selectedVehicle.max_load_capacity;
+    selectedVehicle && !isNaN(cargoNum) && cargoNum > selectedVehicle.max_load_capacity;
 
   const filtered = statusFilter === 'all' ? trips : trips.filter((t) => t.status === statusFilter);
 
@@ -128,15 +129,18 @@ export default function TripsPage() {
       toast.error('Select a vehicle and a driver.');
       return;
     }
-    if (form.cargo_weight <= 0) {
+    const cargoWeight = parseFloat(form.cargo_weight as string);
+    const plannedDistance = parseFloat(form.planned_distance as string);
+    const revenue = parseFloat(form.revenue as string);
+    if (isNaN(cargoWeight) || cargoWeight <= 0) {
       toast.error('Cargo weight must be greater than 0 kg.');
       return;
     }
-    if (form.planned_distance <= 0) {
+    if (isNaN(plannedDistance) || plannedDistance <= 0) {
       toast.error('Planned distance must be greater than 0 km.');
       return;
     }
-    if (form.revenue < 0) {
+    if (isNaN(revenue) || revenue < 0) {
       toast.error('Revenue cannot be negative.');
       return;
     }
@@ -149,7 +153,7 @@ export default function TripsPage() {
       return;
     }
     try {
-      await createTrip({ ...form, status: 'Draft' });
+      await createTrip({ ...form, cargo_weight: cargoWeight, planned_distance: plannedDistance, revenue, status: 'Draft' });
       toast.success('Trip created as Draft');
       setCreateOpen(false);
       setForm(emptyTrip);
@@ -179,22 +183,28 @@ export default function TripsPage() {
   };
   const openComplete = (t: Trip) => {
     const v = vehiclesById.get(t.vehicle_id);
-    setCompleteForm({ final_odometer: v?.odometer ?? 0, fuel_consumed_liters: 0 });
+    setCompleteForm({ final_odometer: v?.odometer !== undefined ? String(v.odometer) : '', fuel_consumed_liters: '' });
     setCompleteTripState(t);
   };
   const submitComplete = async () => {
     if (!completeTripState) return;
+    const finalOdo = parseFloat(completeForm.final_odometer as string);
+    const fuelConsumed = parseFloat(completeForm.fuel_consumed_liters as string);
     const v = vehiclesById.get(completeTripState.vehicle_id);
-    if (v && completeForm.final_odometer < v.odometer) {
+    if (isNaN(finalOdo)) {
+      toast.error('Final odometer reading is required.');
+      return;
+    }
+    if (v && finalOdo < v.odometer) {
       toast.error(`Final odometer must be ≥ current odometer (${v.odometer} km).`);
       return;
     }
-    if (completeForm.fuel_consumed_liters <= 0) {
+    if (isNaN(fuelConsumed) || fuelConsumed <= 0) {
       toast.error('Fuel consumed must be greater than 0.');
       return;
     }
     try {
-      await completeTrip(completeTripState.id, completeForm);
+      await completeTrip(completeTripState.id, { final_odometer: finalOdo, fuel_consumed_liters: fuelConsumed });
       toast.success(`Trip #${completeTripState.id} completed`);
       setCompleteTripState(null);
       load();
@@ -387,7 +397,7 @@ export default function TripsPage() {
               <Input
                 type="number"
                 value={form.cargo_weight}
-                onChange={(e) => setForm((f) => ({ ...f, cargo_weight: Number(e.target.value) }))}
+                onChange={(e) => setForm((f) => ({ ...f, cargo_weight: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -396,7 +406,7 @@ export default function TripsPage() {
                 type="number"
                 value={form.planned_distance}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, planned_distance: Number(e.target.value) }))
+                  setForm((f) => ({ ...f, planned_distance: e.target.value }))
                 }
               />
             </div>
@@ -405,7 +415,7 @@ export default function TripsPage() {
               <Input
                 type="number"
                 value={form.revenue}
-                onChange={(e) => setForm((f) => ({ ...f, revenue: Number(e.target.value) }))}
+                onChange={(e) => setForm((f) => ({ ...f, revenue: e.target.value }))}
               />
             </div>
           </div>
@@ -478,7 +488,7 @@ export default function TripsPage() {
                 type="number"
                 value={completeForm.final_odometer}
                 onChange={(e) =>
-                  setCompleteForm((f) => ({ ...f, final_odometer: Number(e.target.value) }))
+                  setCompleteForm((f) => ({ ...f, final_odometer: e.target.value }))
                 }
               />
             </div>
@@ -491,7 +501,7 @@ export default function TripsPage() {
                 onChange={(e) =>
                   setCompleteForm((f) => ({
                     ...f,
-                    fuel_consumed_liters: Number(e.target.value),
+                    fuel_consumed_liters: e.target.value,
                   }))
                 }
               />

@@ -59,15 +59,15 @@ export default function FuelExpensesPage() {
   const today = new Date().toISOString().slice(0, 10);
   const [fuelForm, setFuelForm] = useState({
     vehicle_id: null as number | null,
-    liters: 0,
-    cost: 0,
+    liters: '' as string,
+    cost: '' as string,
     logged_date: today,
     trip_id: null as number | null,
   });
   const [expForm, setExpForm] = useState({
     vehicle_id: null as number | null,
     type: 'Tolls' as Expense['type'],
-    amount: 0,
+    amount: '' as string,
     description: '',
     logged_date: today,
   });
@@ -90,21 +90,23 @@ export default function FuelExpensesPage() {
   const activeTrips = trips.filter((t) => t.status === 'Dispatched' || t.status === 'Draft');
 
   const submitFuel = async () => {
-    if (!fuelForm.vehicle_id || fuelForm.liters <= 0 || fuelForm.cost <= 0) {
-      toast.error('Vehicle, liters and cost are required.');
+    const liters = parseFloat(fuelForm.liters as string);
+    const cost = parseFloat(fuelForm.cost as string);
+    if (!fuelForm.vehicle_id || isNaN(liters) || liters <= 0 || isNaN(cost) || cost <= 0) {
+      toast.error('Vehicle, liters (> 0) and cost (> 0) are required.');
       return;
     }
     try {
       await createFuelLog({
         vehicle_id: fuelForm.vehicle_id,
-        liters: fuelForm.liters,
-        cost: fuelForm.cost,
+        liters,
+        cost,
         logged_date: fuelForm.logged_date,
         ...(fuelForm.trip_id ? { trip_id: fuelForm.trip_id } : {}),
       });
       toast.success('Fuel log recorded');
       setFuelOpen(false);
-      setFuelForm({ vehicle_id: null, liters: 0, cost: 0, logged_date: today, trip_id: null });
+      setFuelForm({ vehicle_id: null, liters: '', cost: '', logged_date: today, trip_id: null });
       load();
     } catch (e: any) {
       toast.error(e?.response?.data?.message ?? 'Failed to record fuel');
@@ -112,15 +114,16 @@ export default function FuelExpensesPage() {
   };
 
   const submitExpense = async () => {
-    if (!expForm.vehicle_id || expForm.amount <= 0) {
-      toast.error('Vehicle and amount are required.');
+    const amount = parseFloat(expForm.amount as string);
+    if (!expForm.vehicle_id || isNaN(amount) || amount <= 0) {
+      toast.error('Vehicle and a valid amount (> 0) are required.');
       return;
     }
     try {
       await createExpense({
         vehicle_id: expForm.vehicle_id,
         type: expForm.type,
-        amount: expForm.amount,
+        amount,
         description: expForm.description,
         logged_date: expForm.logged_date,
       });
@@ -129,7 +132,7 @@ export default function FuelExpensesPage() {
       setExpForm({
         vehicle_id: null,
         type: 'Tolls',
-        amount: 0,
+        amount: '',
         description: '',
         logged_date: today,
       });
@@ -316,7 +319,7 @@ export default function FuelExpensesPage() {
                 type="number"
                 step="0.01"
                 value={fuelForm.liters}
-                onChange={(e) => setFuelForm((f) => ({ ...f, liters: Number(e.target.value) }))}
+                onChange={(e) => setFuelForm((f) => ({ ...f, liters: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -325,7 +328,7 @@ export default function FuelExpensesPage() {
                 type="number"
                 step="0.01"
                 value={fuelForm.cost}
-                onChange={(e) => setFuelForm((f) => ({ ...f, cost: Number(e.target.value) }))}
+                onChange={(e) => setFuelForm((f) => ({ ...f, cost: e.target.value }))}
               />
             </div>
             <div className="space-y-2">
@@ -417,7 +420,7 @@ export default function FuelExpensesPage() {
                 type="number"
                 step="0.01"
                 value={expForm.amount}
-                onChange={(e) => setExpForm((f) => ({ ...f, amount: Number(e.target.value) }))}
+                onChange={(e) => setExpForm((f) => ({ ...f, amount: e.target.value }))}
               />
             </div>
             <div className="space-y-2">

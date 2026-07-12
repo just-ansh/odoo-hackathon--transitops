@@ -48,14 +48,22 @@ import { toast } from 'sonner';
 const STATUSES: Driver['status'][] = ['Available', 'On Trip', 'Off Duty', 'Suspended'];
 const CATEGORIES = ['A', 'B', 'C', 'D', 'CDL-A', 'CDL-B'];
 
-type FormState = Omit<Driver, 'id'>;
+type FormState = {
+  name: string;
+  license_number: string;
+  license_category: string;
+  license_expiry_date: string;
+  contact_number: string;
+  safety_score: string;
+  status: Driver['status'];
+};
 const emptyForm: FormState = {
   name: '',
   license_number: '',
   license_category: 'B',
   license_expiry_date: new Date().toISOString().slice(0, 10),
   contact_number: '',
-  safety_score: 80,
+  safety_score: '80',
   status: 'Available',
 };
 
@@ -110,8 +118,15 @@ export default function DriversPage() {
   };
   const openEdit = (d: Driver) => {
     setEditing(d);
-    const { id: _i, ...rest } = d;
-    setForm(rest);
+    setForm({
+      name: d.name,
+      license_number: d.license_number,
+      license_category: d.license_category,
+      license_expiry_date: d.license_expiry_date,
+      contact_number: d.contact_number,
+      safety_score: String(d.safety_score),
+      status: d.status,
+    });
     setDialogOpen(true);
   };
   const submit = async () => {
@@ -131,16 +146,18 @@ export default function DriversPage() {
       toast.error('License expiry date is required.');
       return;
     }
-    if (form.safety_score < 0 || form.safety_score > 100) {
+    const safetyScore = parseFloat(form.safety_score as string);
+    if (isNaN(safetyScore) || safetyScore < 0 || safetyScore > 100) {
       toast.error('Safety score must be between 0 and 100.');
       return;
     }
+    const payload = { ...form, safety_score: safetyScore };
     try {
       if (editing) {
-        await updateDriver(editing.id, form);
+        await updateDriver(editing.id, payload);
         toast.success('Driver updated');
       } else {
-        await createDriver(form);
+        await createDriver(payload);
         toast.success('Driver created');
       }
       setDialogOpen(false);
@@ -413,7 +430,7 @@ export default function DriversPage() {
                 min={0}
                 max={100}
                 value={form.safety_score}
-                onChange={(e) => setForm((f) => ({ ...f, safety_score: Number(e.target.value) }))}
+                onChange={(e) => setForm((f) => ({ ...f, safety_score: e.target.value }))}
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
