@@ -35,11 +35,11 @@ import {
 interface KPIs {
   active_vehicles: number;
   available_vehicles: number;
-  vehicles_in_maintenance: number;
+  in_maintenance: number;
   active_trips: number;
   pending_trips: number;
   drivers_on_duty: number;
-  fleet_utilization_pct: number;
+  fleet_utilization: number;
   weekly_trips?: { day: string; trips: number }[];
   monthly_revenue?: { month: string; revenue: number }[];
 }
@@ -47,11 +47,11 @@ interface KPIs {
 const defaultKPIs: KPIs = {
   active_vehicles: 0,
   available_vehicles: 0,
-  vehicles_in_maintenance: 0,
+  in_maintenance: 0,
   active_trips: 0,
   pending_trips: 0,
   drivers_on_duty: 0,
-  fleet_utilization_pct: 0,
+  fleet_utilization: 0,
   weekly_trips: [
     { day: 'Mon', trips: 12 },
     { day: 'Tue', trips: 18 },
@@ -122,7 +122,7 @@ export default function DashboardPage() {
     getDashboardKPIs(params)
       .then((data: any) => {
         if (cancelled) return;
-        setKpis({ ...defaultKPIs, ...(data?.data ?? {}) });
+        setKpis({ ...defaultKPIs, ...(data ?? {}) });
       })
       .catch(() => {})
       .finally(() => !cancelled && setLoading(false));
@@ -169,16 +169,15 @@ export default function DashboardPage() {
               value={filters.region}
               onValueChange={(v) => setFilters((f) => ({ ...f, region: v }))}
             >
-              <SelectTrigger className="w-[150px]">
+              <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Region" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Regions</SelectItem>
-                <SelectItem value="Delhi NCR">Delhi NCR</SelectItem>
-                <SelectItem value="Mumbai Region">Mumbai Region</SelectItem>
-                <SelectItem value="Bangalore South">Bangalore South</SelectItem>
-                <SelectItem value="Chennai Coastal">Chennai Coastal</SelectItem>
-                <SelectItem value="Kolkata East">Kolkata East</SelectItem>
+                <SelectItem value="North">North</SelectItem>
+                <SelectItem value="South">South</SelectItem>
+                <SelectItem value="East">East</SelectItem>
+                <SelectItem value="West">West</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -202,7 +201,7 @@ export default function DashboardPage() {
         />
         <KpiCard
           label="In Maintenance"
-          value={kpis.vehicles_in_maintenance}
+          value={kpis.in_maintenance}
           icon={Wrench}
           accent="from-amber-500 to-orange-500"
           hint="Under repair"
@@ -236,7 +235,7 @@ export default function DashboardPage() {
                   Fleet Utilization
                 </CardDescription>
                 <div className="mt-2 text-3xl font-bold">
-                  {Number(kpis.fleet_utilization_pct ?? 0).toFixed(1)}%
+                  {Number(kpis.fleet_utilization ?? 0).toFixed(1)}%
                 </div>
               </div>
               <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white">
@@ -245,7 +244,7 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <Progress value={Number(kpis.fleet_utilization_pct ?? 0)} className="h-2" />
+            <Progress value={Number(kpis.fleet_utilization ?? 0)} className="h-2" />
             <p className="mt-2 text-xs text-slate-500">
               Higher utilization means better ROI. Aim for 70%+ sustained.
             </p>

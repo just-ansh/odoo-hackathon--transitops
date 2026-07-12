@@ -81,7 +81,7 @@ def get_vehicles(
     where = f"WHERE {' AND '.join(filters)}" if filters else ""
     query = f"""
         SELECT id, registration_number, name_model, type, max_load_capacity,
-               odometer, acquisition_cost, status, created_at
+               odometer, acquisition_cost, status, region, created_at
         FROM vehicles
         {where}
         ORDER BY id ASC

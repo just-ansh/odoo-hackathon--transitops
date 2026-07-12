@@ -51,25 +51,15 @@ import { toast } from 'sonner';
 
 const VEHICLE_TYPES = ['Truck', 'Van', 'Trailer', 'Refrigerated', 'Tanker'];
 const STATUSES: Vehicle['status'][] = ['Available', 'On Trip', 'In Shop', 'Retired'];
-const INDIAN_REGIONS = ['Delhi NCR', 'Mumbai Region', 'Bangalore South', 'Chennai Coastal', 'Kolkata East'];
 
-type FormState = {
-  registration_number: string;
-  name_model: string;
-  type: string;
-  max_load_capacity: string;
-  odometer: string;
-  acquisition_cost: string;
-  status: Vehicle['status'];
-  region: string;
-};
+type FormState = Omit<Vehicle, 'id'>;
 const emptyForm: FormState = {
   registration_number: '',
   name_model: '',
   type: 'Truck',
-  max_load_capacity: '',
-  odometer: '',
-  acquisition_cost: '',
+  max_load_capacity: 0,
+  odometer: 0,
+  acquisition_cost: 0,
   status: 'Available',
   region: '',
 };
@@ -128,58 +118,21 @@ export default function VehiclesPage() {
   };
   const openEdit = (v: Vehicle) => {
     setEditing(v);
-    setForm({
-      registration_number: v.registration_number,
-      name_model: v.name_model,
-      type: v.type,
-      max_load_capacity: String(v.max_load_capacity),
-      odometer: String(v.odometer),
-      acquisition_cost: String(v.acquisition_cost),
-      status: v.status,
-      region: v.region ?? '',
-    });
+    const { id: _id, ...rest } = v;
+    setForm(rest);
     setDialogOpen(true);
   };
   const submit = async () => {
-    if (!form.registration_number.trim() || form.registration_number.trim().length < 3) {
-      toast.error('Registration number must be at least 3 characters.');
+    if (!form.registration_number.trim() || !form.name_model.trim()) {
+      toast.error('Registration number and model are required.');
       return;
     }
-    if (!form.name_model.trim() || form.name_model.trim().length < 2) {
-      toast.error('Name / Model must be at least 2 characters.');
-      return;
-    }
-    const maxLoad = parseFloat(form.max_load_capacity as string);
-    const odometer = parseFloat(form.odometer as string);
-    const acqCost = parseFloat(form.acquisition_cost as string);
-    if (isNaN(maxLoad) || maxLoad <= 0) {
-      toast.error('Max load capacity must be greater than 0 kg.');
-      return;
-    }
-    if (isNaN(odometer) || odometer < 0) {
-      toast.error('Odometer reading cannot be negative.');
-      return;
-    }
-    if (isNaN(acqCost) || acqCost <= 0) {
-      toast.error('Acquisition cost must be greater than $0.');
-      return;
-    }
-    if (!form.region?.trim() || form.region.trim().length < 2) {
-      toast.error('Operational region must be at least 2 characters.');
-      return;
-    }
-    const payload = {
-      ...form,
-      max_load_capacity: maxLoad,
-      odometer: odometer,
-      acquisition_cost: acqCost,
-    };
     try {
       if (editing) {
-        await updateVehicle(editing.id, payload);
+        await updateVehicle(editing.id, form);
         toast.success('Vehicle updated');
       } else {
-        await createVehicle(payload);
+        await createVehicle(form);
         toast.success('Vehicle created');
       }
       setDialogOpen(false);
@@ -408,7 +361,7 @@ export default function VehiclesPage() {
                 type="number"
                 value={form.max_load_capacity}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, max_load_capacity: e.target.value }))
+                  setForm((f) => ({ ...f, max_load_capacity: Number(e.target.value) }))
                 }
               />
             </div>
@@ -417,7 +370,7 @@ export default function VehiclesPage() {
               <Input
                 type="number"
                 value={form.odometer}
-                onChange={(e) => setForm((f) => ({ ...f, odometer: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, odometer: Number(e.target.value) }))}
               />
             </div>
             <div className="space-y-2">
@@ -426,27 +379,16 @@ export default function VehiclesPage() {
                 type="number"
                 value={form.acquisition_cost}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, acquisition_cost: e.target.value }))
+                  setForm((f) => ({ ...f, acquisition_cost: Number(e.target.value) }))
                 }
               />
             </div>
             <div className="space-y-2">
               <Label>Region</Label>
-              <Select
-                value={form.region}
-                onValueChange={(v) => setForm((f) => ({ ...f, region: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Operational Region" />
-                </SelectTrigger>
-                <SelectContent>
-                  {INDIAN_REGIONS.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                value={form.region ?? ''}
+                onChange={(e) => setForm((f) => ({ ...f, region: e.target.value }))}
+              />
             </div>
           </div>
           <DialogFooter>
