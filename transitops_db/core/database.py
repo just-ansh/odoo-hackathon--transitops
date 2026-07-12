@@ -1162,6 +1162,75 @@ def get_dashboard_kpis(
             
             utilization = round((float(active_vehicles) / float(total_vehicles) * 100), 2) if total_vehicles > 0 else 0.0
             
+            # --- Real Dynamic weekly_trips and monthly_revenue ---
+            from datetime import date, timedelta
+            import calendar
+            
+            today_val = date.today()
+            
+            # 1. Weekly Trips (last 7 days)
+            last_7_days = [today_val - timedelta(days=i) for i in range(6, -1, -1)]
+            weekly_data = {d.strftime("%a"): 0 for d in last_7_days}
+            
+            filters_for_trips = []
+            params_for_trips = []
+            if vehicle_type:
+                filters_for_trips.append("v.type = %s")
+                params_for_trips.append(vehicle_type)
+            if status:
+                filters_for_trips.append("v.status = %s")
+                params_for_trips.append(status)
+            if region:
+                filters_for_trips.append("v.region = %s")
+                params_for_trips.append(region)
+                
+            where_trips = f"WHERE {' AND '.join(filters_for_trips)}" if filters_for_trips else ""
+            and_trips = "AND" if where_trips else "WHERE"
+            
+            cur.execute(f"""
+                SELECT TO_CHAR(t.created_at, 'Dy') as day, COUNT(*) as trips
+                FROM trips t
+                JOIN vehicles v ON t.vehicle_id = v.id
+                {where_trips} {and_trips} t.created_at >= CURRENT_DATE - INTERVAL '6 days'
+                GROUP BY TO_CHAR(t.created_at, 'Dy')
+            """, params_for_trips)
+            
+            for r in cur.fetchall():
+                day_name = r["day"].strip()
+                if day_name in weekly_data:
+                    weekly_data[day_name] = r["trips"]
+            
+            weekly_trips = [{"day": k, "trips": v} for k, v in weekly_data.items()]
+            
+            # 2. Monthly Revenue (last 6 months)
+            current_month = today_val.month
+            current_year = today_val.year
+            months_list = []
+            for i in range(5, -1, -1):
+                m = current_month - i
+                if m <= 0:
+                    m += 12
+                month_abbr = calendar.month_abbr[m]
+                months_list.append(month_abbr)
+                
+            monthly_data = {m: 0.0 for m in months_list}
+            
+            cur.execute(f"""
+                SELECT TO_CHAR(t.created_at, 'Mon') as month, COALESCE(SUM(t.revenue), 0) as revenue
+                FROM trips t
+                JOIN vehicles v ON t.vehicle_id = v.id
+                {where_trips} {and_trips} t.status = 'Completed'
+                AND t.created_at >= CURRENT_DATE - INTERVAL '5 months'
+                GROUP BY TO_CHAR(t.created_at, 'Mon')
+            """, params_for_trips)
+            
+            for r in cur.fetchall():
+                m_name = r["month"].strip()
+                if m_name in monthly_data:
+                    monthly_data[m_name] = float(r["revenue"])
+                    
+            monthly_revenue = [{"month": k, "revenue": v} for k, v in monthly_data.items()]
+            
             return {
                 "active_vehicles": active_vehicles,
                 "available_vehicles": available_vehicles,
@@ -1169,7 +1238,9 @@ def get_dashboard_kpis(
                 "active_trips": active_trips,
                 "pending_trips": pending_trips,
                 "drivers_on_duty": drivers_on_duty,
-                "fleet_utilization_pct": utilization
+                "fleet_utilization_pct": utilization,
+                "weekly_trips": weekly_trips,
+                "monthly_revenue": monthly_revenue
             }
 
 
