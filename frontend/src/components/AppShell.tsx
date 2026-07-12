@@ -8,11 +8,14 @@ import {
   Fuel,
   BarChart3,
   LogOut,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useTheme } from 'next-themes';
 
 const nav = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -33,6 +36,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const logout = useAuthStore((s) => s.logout);
   const location = useLocation();
   const pathname = location.pathname;
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     if (token) {
@@ -108,6 +112,17 @@ export function AppShell({ children }: { children?: ReactNode }) {
               <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-950/30 dark:text-indigo-400 dark:ring-indigo-400/20">
                 {user?.role}
               </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                title="Toggle Theme"
+                className="relative"
+              >
+                <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                <span className="sr-only">Toggle theme</span>
+              </Button>
               <Button variant="ghost" size="icon" onClick={logout} title="Sign out">
                 <LogOut className="h-4 w-4" />
               </Button>
