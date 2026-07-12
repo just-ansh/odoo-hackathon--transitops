@@ -329,9 +329,9 @@ export default function ReportsPage() {
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-15} height={50} />
-                <YAxis tick={{ fontSize: 12 }} unit="%" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.8} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--foreground)' }} stroke="var(--border)" interval={0} angle={-15} height={50} />
+                <YAxis tick={{ fontSize: 12, fill: 'var(--foreground)' }} stroke="var(--border)" unit="%" />
                 <Tooltip
                   formatter={(value: any) => [`${value}%`, 'ROI']}
                   contentStyle={{
@@ -343,8 +343,8 @@ export default function ReportsPage() {
                   itemStyle={{ color: 'var(--foreground)' }}
                   labelStyle={{ color: 'var(--muted-foreground)' }}
                 />
-                <ReferenceLine y={0} stroke="var(--border)" strokeWidth={1.5} />
-                <Bar dataKey="roi" radius={[6, 6, 0, 0]}>
+                <ReferenceLine y={0} stroke="var(--foreground)" strokeWidth={2} />
+                <Bar dataKey="roi" radius={[6, 6, 0, 0]} stroke="var(--foreground)" strokeWidth={1.5}>
                   {chartData.map((d, i) => (
                     <Cell
                       key={i}
