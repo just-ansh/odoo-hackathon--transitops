@@ -15,6 +15,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -342,6 +343,7 @@ export default function ReportsPage() {
                   itemStyle={{ color: 'var(--foreground)' }}
                   labelStyle={{ color: 'var(--muted-foreground)' }}
                 />
+                <ReferenceLine y={0} stroke="var(--border)" strokeWidth={1.5} />
                 <Bar dataKey="roi" radius={[6, 6, 0, 0]}>
                   {chartData.map((d, i) => (
                     <Cell
