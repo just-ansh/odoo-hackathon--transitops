@@ -29,7 +29,7 @@ import {
   getVehicles,
 } from '@/lib/api';
 import type { FuelLog, MaintenanceLog, Trip, Vehicle } from '@/types';
-import { Download, TrendingUp, Gauge, DollarSign } from 'lucide-react';
+import { Download, TrendingUp, Gauge, DollarSign, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface FleetRoi {
@@ -187,6 +187,7 @@ export default function ReportsPage() {
       'Revenue',
       'Fuel Cost',
       'Maintenance Cost',
+      'Operational Cost',
       'Acquisition Cost',
       'ROI %',
     ];
@@ -196,6 +197,7 @@ export default function ReportsPage() {
       r.revenue.toFixed(2),
       r.fuel_cost.toFixed(2),
       r.maintenance_cost.toFixed(2),
+      (r.fuel_cost + r.maintenance_cost).toFixed(2),
       r.acquisition_cost.toFixed(2),
       (r.roi * 100).toFixed(2),
     ]);
@@ -205,6 +207,7 @@ export default function ReportsPage() {
       fleet.revenue.toFixed(2),
       fleet.fuel_cost.toFixed(2),
       fleet.maintenance_cost.toFixed(2),
+      (fleet.fuel_cost + fleet.maintenance_cost).toFixed(2),
       fleet.acquisition_cost.toFixed(2),
       (fleet.roi * 100).toFixed(2),
     ];
@@ -221,19 +224,28 @@ export default function ReportsPage() {
     toast.success('Report exported');
   };
 
+  const printPdf = () => {
+    window.print();
+  };
+
   return (
     <AppShell>
       <PageHeader
         title="Reports & ROI"
         description="Financial performance, fuel efficiency, and utilization."
         actions={
-          <Button onClick={exportCsv} className="gap-2">
-            <Download className="h-4 w-4" /> Export CSV
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={exportCsv} variant="outline" className="gap-2">
+              <Download className="h-4 w-4" /> Export CSV
+            </Button>
+            <Button onClick={printPdf} className="gap-2">
+              <FileText className="h-4 w-4" /> Print PDF
+            </Button>
+          </div>
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <SummaryCard
           label="Fleet ROI"
           value={fleet ? `${(fleet.roi * 100).toFixed(1)}%` : '—'}
@@ -256,7 +268,14 @@ export default function ReportsPage() {
           hint="On Trip / (On Trip + Available)"
         />
         <SummaryCard
-          label="Revenue"
+          label="Operational Cost"
+          value={fleet ? `$${(fleet.fuel_cost + fleet.maintenance_cost).toLocaleString()}` : '—'}
+          icon={DollarSign}
+          accent="from-rose-500 to-red-600"
+          hint="Fuel + Maintenance"
+        />
+        <SummaryCard
+          label="Gross Revenue"
           value={fleet ? `$${fleet.revenue.toLocaleString()}` : '—'}
           icon={DollarSign}
           accent="from-fuchsia-500 to-pink-600"
@@ -338,6 +357,7 @@ export default function ReportsPage() {
                   <TableHead>Revenue</TableHead>
                   <TableHead>Fuel</TableHead>
                   <TableHead>Maintenance</TableHead>
+                  <TableHead>Operational Cost</TableHead>
                   <TableHead>Acquisition</TableHead>
                   <TableHead>ROI</TableHead>
                 </TableRow>
@@ -345,7 +365,7 @@ export default function ReportsPage() {
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-500">
+                    <TableCell colSpan={8} className="py-10 text-center text-sm text-slate-500">
                       No data available yet.
                     </TableCell>
                   </TableRow>
@@ -368,6 +388,7 @@ export default function ReportsPage() {
                       <TableCell>${r.revenue.toLocaleString()}</TableCell>
                       <TableCell>${r.fuel_cost.toLocaleString()}</TableCell>
                       <TableCell>${r.maintenance_cost.toLocaleString()}</TableCell>
+                      <TableCell className="font-semibold">${(r.fuel_cost + r.maintenance_cost).toLocaleString()}</TableCell>
                       <TableCell>${r.acquisition_cost.toLocaleString()}</TableCell>
                       <TableCell
                         className={
