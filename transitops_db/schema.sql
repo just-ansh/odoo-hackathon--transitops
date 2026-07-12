@@ -1,7 +1,6 @@
 -- TransitOps Database Schema (schema.sql)
 -- Act as an expert Senior Database Architect
 
--- 1. CLEANUP (Optional/Drop if exists for clean state)
 DROP TABLE IF EXISTS expenses CASCADE;
 DROP TABLE IF EXISTS fuel_logs CASCADE;
 DROP TABLE IF EXISTS maintenance_logs CASCADE;
@@ -17,7 +16,7 @@ DROP TYPE IF EXISTS driver_status CASCADE;
 DROP TYPE IF EXISTS vehicle_status CASCADE;
 DROP TYPE IF EXISTS user_role CASCADE;
 
--- 2. CREATE OPERATIONAL ENUMS
+-- Create Custom Enums
 CREATE TYPE user_role AS ENUM (
     'Fleet Manager', 
     'Driver', 
@@ -57,9 +56,7 @@ CREATE TYPE expense_type AS ENUM (
     'Other'
 );
 
--- 3. CREATE TABLES
-
--- users: Auth & roles
+-- Users Table
 CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -68,7 +65,7 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
--- vehicles: Fleet details
+-- Vehicles Table
 CREATE TABLE vehicles (
     id BIGSERIAL PRIMARY KEY,
     registration_number VARCHAR(50) UNIQUE NOT NULL,
@@ -81,7 +78,7 @@ CREATE TABLE vehicles (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
--- drivers: Driver profile & licensing
+-- Drivers Table
 CREATE TABLE drivers (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -94,7 +91,7 @@ CREATE TABLE drivers (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
--- trips: Routes, logistics, and revenues
+-- Trips Table
 CREATE TABLE trips (
     id BIGSERIAL PRIMARY KEY,
     source VARCHAR(150) NOT NULL,
@@ -116,12 +113,12 @@ CREATE TABLE trips (
     )
 );
 
--- maintenance_logs: Vehicle service logs
+-- Maintenance Logs Table
 CREATE TABLE maintenance_logs (
     id BIGSERIAL PRIMARY KEY,
     vehicle_id BIGINT REFERENCES vehicles(id) ON DELETE CASCADE NOT NULL,
     description TEXT NOT NULL,
-    cost NUMERIC(12, 2) NOT NULL CHECK (cost >= 0),
+    cost NUMERIC(12, 2) DEFAULT 0.00 NOT NULL CHECK (cost >= 0),
     status maintenance_status DEFAULT 'Open' NOT NULL,
     logged_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     closed_at TIMESTAMPTZ,
@@ -132,7 +129,7 @@ CREATE TABLE maintenance_logs (
     )
 );
 
--- fuel_logs: Fuel purchases per vehicle/trip
+-- Fuel Logs Table
 CREATE TABLE fuel_logs (
     id BIGSERIAL PRIMARY KEY,
     vehicle_id BIGINT REFERENCES vehicles(id) ON DELETE CASCADE NOT NULL,
@@ -142,7 +139,7 @@ CREATE TABLE fuel_logs (
     logged_date DATE DEFAULT CURRENT_DATE NOT NULL
 );
 
--- expenses: Additional operational expenses (tolls, etc.)
+-- Expenses Table
 CREATE TABLE expenses (
     id BIGSERIAL PRIMARY KEY,
     vehicle_id BIGINT REFERENCES vehicles(id) ON DELETE CASCADE NOT NULL,
@@ -152,8 +149,7 @@ CREATE TABLE expenses (
     logged_date DATE DEFAULT CURRENT_DATE NOT NULL
 );
 
--- 4. PERFORMANCE INDEXES
--- Index foreign keys to optimize query performance and join operations
+-- Indexes for performance
 CREATE INDEX idx_trips_vehicle_id ON trips(vehicle_id);
 CREATE INDEX idx_trips_driver_id ON trips(driver_id);
 CREATE INDEX idx_maintenance_logs_vehicle_id ON maintenance_logs(vehicle_id);
@@ -161,7 +157,6 @@ CREATE INDEX idx_fuel_logs_vehicle_id ON fuel_logs(vehicle_id);
 CREATE INDEX idx_fuel_logs_trip_id ON fuel_logs(trip_id);
 CREATE INDEX idx_expenses_vehicle_id ON expenses(vehicle_id);
 
--- Operational status indexes
 CREATE INDEX idx_vehicles_status ON vehicles(status);
 CREATE INDEX idx_drivers_status ON drivers(status);
 CREATE INDEX idx_trips_status ON trips(status);
