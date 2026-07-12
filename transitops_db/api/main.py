@@ -47,6 +47,11 @@ from api.schemas import (
     CloseMaintenanceRequest,
     AddFuelLogRequest,
     AddExpenseRequest,
+    VehicleCreate,
+    VehicleUpdate,
+    DriverCreate,
+    DriverUpdate,
+    TripCreate,
 )
 
 app = FastAPI(
@@ -380,3 +385,250 @@ def api_get_vehicle_roi_breakdown(
         return {"vehicle_roi_breakdown": database.get_vehicle_roi_breakdown()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# VEHICLES CRUD ENDPOINTS
+# =====================================================================
+
+@app.post("/api/vehicles", status_code=201, tags=["Vehicles"])
+def api_create_vehicle(
+    payload: VehicleCreate,
+    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+):
+    """**Fleet Manager only.** Adds a new vehicle to the fleet registry."""
+    try:
+        vehicle = database.create_vehicle(
+            registration_number=payload.registration_number,
+            name_model=payload.name_model,
+            type=payload.type,
+            max_load_capacity=payload.max_load_capacity,
+            odometer=payload.odometer,
+            acquisition_cost=payload.acquisition_cost,
+            status=payload.status,
+            region=payload.region
+        )
+        return {"message": "Vehicle successfully registered", "vehicle": vehicle}
+    except database.DuplicateEntryError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/vehicles/{vehicle_id}", tags=["Vehicles"])
+def api_update_vehicle(
+    vehicle_id: int,
+    payload: VehicleUpdate,
+    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+):
+    """**Fleet Manager only.** Updates an existing vehicle's fields."""
+    try:
+        updates = payload.model_dump(exclude_unset=True)
+        vehicle = database.update_vehicle(vehicle_id, updates)
+        return {"message": "Vehicle updated successfully", "vehicle": vehicle}
+    except database.EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except database.DuplicateEntryError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/vehicles/{vehicle_id}", tags=["Vehicles"])
+def api_delete_vehicle(
+    vehicle_id: int,
+    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+):
+    """**Fleet Manager only.** Deletes a vehicle from the fleet registry."""
+    try:
+        database.delete_vehicle(vehicle_id)
+        return {"message": "Vehicle deleted successfully"}
+    except database.EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# DRIVERS CRUD ENDPOINTS
+# =====================================================================
+
+@app.post("/api/drivers", status_code=201, tags=["Drivers"])
+def api_create_driver(
+    payload: DriverCreate,
+    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+):
+    """**Fleet Manager only.** Adds a new driver profile."""
+    try:
+        driver = database.create_driver(
+            name=payload.name,
+            license_number=payload.license_number,
+            license_category=payload.license_category,
+            license_expiry_date=str(payload.license_expiry_date),
+            contact_number=payload.contact_number,
+            safety_score=payload.safety_score,
+            status=payload.status
+        )
+        return {"message": "Driver profile created successfully", "driver": driver}
+    except database.DuplicateEntryError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/drivers/{driver_id}", tags=["Drivers"])
+def api_update_driver(
+    driver_id: int,
+    payload: DriverUpdate,
+    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+):
+    """**Fleet Manager only.** Updates an existing driver's profile fields."""
+    try:
+        updates = payload.model_dump(exclude_unset=True)
+        if "license_expiry_date" in updates and updates["license_expiry_date"] is not None:
+            updates["license_expiry_date"] = str(updates["license_expiry_date"])
+        driver = database.update_driver(driver_id, updates)
+        return {"message": "Driver profile updated successfully", "driver": driver}
+    except database.EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except database.DuplicateEntryError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/drivers/{driver_id}", tags=["Drivers"])
+def api_delete_driver(
+    driver_id: int,
+    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+):
+    """**Fleet Manager only.** Deletes a driver profile."""
+    try:
+        database.delete_driver(driver_id)
+        return {"message": "Driver profile deleted successfully"}
+    except database.EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# TRIPS CREATION & LIFECYCLE ENDPOINTS
+# =====================================================================
+
+@app.post("/api/trips", status_code=201, tags=["Trips"])
+def api_create_trip(
+    payload: TripCreate,
+    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+):
+    """
+    **Fleet Manager only.**
+    Creates a new trip (defaults to 'Draft'). If status is 'Dispatched', checks vehicle/driver availability and dispatches.
+    """
+    try:
+        trip = database.create_trip(
+            source=payload.source,
+            destination=payload.destination,
+            vehicle_id=payload.vehicle_id,
+            driver_id=payload.driver_id,
+            cargo_weight=payload.cargo_weight,
+            planned_distance=payload.planned_distance,
+            revenue=payload.revenue,
+            status=payload.status
+        )
+        return {"message": "Trip successfully created", "trip": trip}
+    except database.EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (database.ResourceUnavailableError, database.CapacityExceededError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trips/{trip_id}/dispatch", tags=["Trips"])
+def api_dispatch_existing_trip(
+    trip_id: int,
+    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+):
+    """
+    **Fleet Manager only.**
+    Dispatches an existing 'Draft' trip. Vehicle and driver must be 'Available'.
+    """
+    try:
+        trip = database.dispatch_trip_by_id(trip_id)
+        return {"message": "Trip successfully dispatched", "trip": trip}
+    except database.EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (database.ResourceUnavailableError, database.CapacityExceededError, database.InvalidStatusTransitionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trips/{trip_id}/complete", tags=["Trips"])
+def api_complete_trip_by_id(
+    trip_id: int,
+    payload: CompleteTripRequest,
+    _user: dict = Depends(require_roles(FLEET_MANAGER, DRIVER)),
+):
+    """
+    **Fleet Manager or Driver.**
+    Completes a trip. Records final odometer and fuel consumed.
+    """
+    try:
+        pid = payload.trip_id if payload.trip_id == trip_id else trip_id
+        trip = database.complete_trip(
+            trip_id=pid,
+            final_odometer=payload.final_odometer,
+            fuel_consumed_liters=payload.fuel_consumed_liters,
+        )
+        return {"message": "Trip successfully completed", "trip": trip}
+    except database.EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (database.InvalidOdometerError, database.InvalidStatusTransitionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trips/{trip_id}/cancel", tags=["Trips"])
+def api_cancel_trip(
+    trip_id: int,
+    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+):
+    """
+    **Fleet Manager only.**
+    Cancels a trip. If the trip was Dispatched, restores vehicle and driver status to 'Available'.
+    """
+    try:
+        trip = database.cancel_trip(trip_id)
+        return {"message": "Trip successfully cancelled", "trip": trip}
+    except database.EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except database.InvalidStatusTransitionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =====================================================================
+# DASHBOARD / STATISTICS ENDPOINT
+# =====================================================================
+
+@app.get("/api/dashboard", tags=["Dashboard"])
+def api_get_dashboard_kpis(
+    vehicle_type: Optional[str] = Query(default=None, alias="type"),
+    status: Optional[str] = Query(default=None),
+    region: Optional[str] = Query(default=None),
+    _user: dict = Depends(require_roles(*ALL_ROLES)),
+):
+    """Returns fleet-wide dashboard statistics and KPIs. Any authenticated user may access this."""
+    try:
+        return database.get_dashboard_kpis(
+            vehicle_type=vehicle_type,
+            status=status,
+            region=region
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

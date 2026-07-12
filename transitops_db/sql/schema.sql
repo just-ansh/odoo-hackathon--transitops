@@ -75,6 +75,7 @@ CREATE TABLE vehicles (
     odometer NUMERIC(10, 2) DEFAULT 0.0 NOT NULL CHECK (odometer >= 0),
     acquisition_cost NUMERIC(12, 2) NOT NULL CHECK (acquisition_cost >= 0),
     status vehicle_status DEFAULT 'Available' NOT NULL,
+    region VARCHAR(100),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 

@@ -21,6 +21,12 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=6, description="Account password")
 
 
+class RegisterRequest(BaseModel):
+    email: str = Field(..., description="User email address to register")
+    password: str = Field(..., min_length=6, description="Account password")
+    role: str = Field(..., description="One of: 'Fleet Manager', 'Driver', 'Safety Officer', 'Financial Analyst'")
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -81,3 +87,69 @@ class AddExpenseRequest(BaseModel):
     amount: float = Field(..., ge=0, description="Expense amount")
     description: str = Field(..., min_length=3, description="Description of the expense")
     logged_date: date = Field(..., description="Date the expense was incurred (YYYY-MM-DD)")
+
+
+# =====================================================================
+# VEHICLE CRUD SCHEMAS
+# =====================================================================
+
+class VehicleCreate(BaseModel):
+    registration_number: str = Field(..., description="Unique registration plate number")
+    name_model: str = Field(..., min_length=2, description="Brand and model name")
+    type: str = Field(..., description="Vehicle type, e.g. Flatbed, Heavy Hauler")
+    max_load_capacity: float = Field(..., gt=0, description="Max load capacity in kg")
+    odometer: float = Field(default=0.0, ge=0, description="Initial odometer reading in km")
+    acquisition_cost: float = Field(..., ge=0, description="Cost of acquiring the vehicle")
+    status: str = Field(default="Available", description="Vehicle status")
+    region: Optional[str] = Field(default=None, description="Operational region")
+
+
+class VehicleUpdate(BaseModel):
+    registration_number: Optional[str] = Field(default=None)
+    name_model: Optional[str] = Field(default=None)
+    type: Optional[str] = Field(default=None)
+    max_load_capacity: Optional[float] = Field(default=None, gt=0)
+    odometer: Optional[float] = Field(default=None, ge=0)
+    acquisition_cost: Optional[float] = Field(default=None, ge=0)
+    status: Optional[str] = Field(default=None)
+    region: Optional[str] = Field(default=None)
+
+
+# =====================================================================
+# DRIVER CRUD SCHEMAS
+# =====================================================================
+
+class DriverCreate(BaseModel):
+    name: str = Field(..., min_length=2, description="Full name of driver")
+    license_number: str = Field(..., description="Unique driver license number")
+    license_category: str = Field(..., description="License category, e.g. Class A CDL")
+    license_expiry_date: date = Field(..., description="Driver license expiry date YYYY-MM-DD")
+    contact_number: str = Field(..., description="Driver contact phone number")
+    safety_score: float = Field(default=100.0, ge=0, le=100, description="Driver safety score (0-100)")
+    status: str = Field(default="Available", description="Driver status")
+
+
+class DriverUpdate(BaseModel):
+    name: Optional[str] = Field(default=None)
+    license_number: Optional[str] = Field(default=None)
+    license_category: Optional[str] = Field(default=None)
+    license_expiry_date: Optional[date] = Field(default=None)
+    contact_number: Optional[str] = Field(default=None)
+    safety_score: Optional[float] = Field(default=None, ge=0, le=100)
+    status: Optional[str] = Field(default=None)
+
+
+# =====================================================================
+# TRIP CRUD SCHEMAS
+# =====================================================================
+
+class TripCreate(BaseModel):
+    source: str = Field(..., min_length=2, max_length=150)
+    destination: str = Field(..., min_length=2, max_length=150)
+    vehicle_id: int = Field(...)
+    driver_id: int = Field(...)
+    cargo_weight: float = Field(..., gt=0)
+    planned_distance: float = Field(..., gt=0)
+    revenue: float = Field(default=0.0, ge=0)
+    status: str = Field(default="Draft")
+

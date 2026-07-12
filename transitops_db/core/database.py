@@ -16,7 +16,7 @@ from psycopg.errors import UniqueViolation
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONN_STRING = "host=localhost dbname=transitops user=postgres password=1234 port=5432"
+DEFAULT_CONN_STRING = "host=192.168.0.9 dbname=transitops user=postgres password=1234 port=5432"
 CONN_STRING = os.getenv("DATABASE_URL", DEFAULT_CONN_STRING)
 
 
@@ -643,8 +643,8 @@ def get_vehicle_roi_breakdown(conn_string: str = CONN_STRING) -> List[Dict[str, 
             v.type,
             v.acquisition_cost,
             COALESCE(r.total_revenue, 0)                AS total_revenue,
-            COALESCE(m.total_maintenance, 0)            AS total_maintenance_cost,
-            COALESCE(f.total_fuel, 0)                   AS total_fuel_cost,
+            COALESCE(m.total_maintenance, 0)            AS total_maintenance,
+            COALESCE(f.total_fuel, 0)                   AS total_fuel,
             CASE
                 WHEN v.acquisition_cost = 0 THEN 0.0
                 ELSE ROUND(
@@ -677,3 +677,474 @@ def get_vehicle_roi_breakdown(conn_string: str = CONN_STRING) -> List[Dict[str, 
         with conn.cursor() as cur:
             cur.execute(query)
             return cur.fetchall()
+
+
+# =====================================================================
+# VEHICLES CRUD METHODS
+# =====================================================================
+
+def create_vehicle(
+    registration_number: str,
+    name_model: str,
+    type: str,
+    max_load_capacity: float,
+    odometer: float,
+    acquisition_cost: float,
+    status: str = "Available",
+    region: Optional[str] = None,
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                # Check uniqueness
+                cur.execute("SELECT id FROM vehicles WHERE registration_number = %s", (registration_number,))
+                if cur.fetchone():
+                    raise DuplicateEntryError(f"Vehicle with registration number {registration_number} already exists.")
+                
+                cur.execute(
+                    """
+                    INSERT INTO vehicles 
+                        (registration_number, name_model, type, max_load_capacity, odometer, acquisition_cost, status, region)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, registration_number, name_model, type, max_load_capacity, odometer, acquisition_cost, status, region, created_at
+                    """,
+                    (registration_number, name_model, type, max_load_capacity, odometer, acquisition_cost, status, region)
+                )
+                vehicle = cur.fetchone()
+                conn.commit()
+                return vehicle
+        except UniqueViolation:
+            conn.rollback()
+            raise DuplicateEntryError(f"Vehicle with registration number {registration_number} already exists.")
+        except Exception:
+            conn.rollback()
+            raise
+
+def update_vehicle(
+    vehicle_id: int,
+    updates: Dict[str, Any],
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    if not updates:
+        return get_vehicle_by_id(vehicle_id, conn_string)
+        
+    fields = []
+    params = []
+    for k, v in updates.items():
+        fields.append(f"{k} = %s")
+        params.append(v)
+    params.append(vehicle_id)
+    
+    query = f"""
+        UPDATE vehicles
+        SET {', '.join(fields)}
+        WHERE id = %s
+        RETURNING id, registration_number, name_model, type, max_load_capacity, odometer, acquisition_cost, status, region, created_at
+    """
+    
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                vehicle = cur.fetchone()
+                if not vehicle:
+                    raise EntityNotFoundError(f"Vehicle {vehicle_id} not found.")
+                conn.commit()
+                return vehicle
+        except UniqueViolation:
+            conn.rollback()
+            raise DuplicateEntryError("A vehicle with this registration number already exists.")
+        except Exception:
+            conn.rollback()
+            raise
+
+def delete_vehicle(
+    vehicle_id: int,
+    conn_string: str = CONN_STRING
+) -> None:
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT status FROM vehicles WHERE id = %s", (vehicle_id,))
+                vehicle = cur.fetchone()
+                if not vehicle:
+                    raise EntityNotFoundError(f"Vehicle {vehicle_id} not found.")
+                cur.execute("DELETE FROM vehicles WHERE id = %s", (vehicle_id,))
+                conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+def get_vehicle_by_id(
+    vehicle_id: int,
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    with get_connection(conn_string) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, registration_number, name_model, type, max_load_capacity, odometer, acquisition_cost, status, region, created_at
+                FROM vehicles WHERE id = %s
+                """,
+                (vehicle_id,)
+            )
+            vehicle = cur.fetchone()
+            if not vehicle:
+                raise EntityNotFoundError(f"Vehicle {vehicle_id} not found.")
+            return vehicle
+
+
+# =====================================================================
+# DRIVERS CRUD METHODS
+# =====================================================================
+
+def create_driver(
+    name: str,
+    license_number: str,
+    license_category: str,
+    license_expiry_date: str,
+    contact_number: str,
+    safety_score: float = 100.0,
+    status: str = "Available",
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM drivers WHERE license_number = %s", (license_number,))
+                if cur.fetchone():
+                    raise DuplicateEntryError(f"Driver with license number {license_number} already exists.")
+                
+                cur.execute(
+                    """
+                    INSERT INTO drivers 
+                        (name, license_number, license_category, license_expiry_date, contact_number, safety_score, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, name, license_number, license_category, license_expiry_date, contact_number, safety_score, status, created_at
+                    """,
+                    (name, license_number, license_category, license_expiry_date, contact_number, safety_score, status)
+                )
+                driver = cur.fetchone()
+                conn.commit()
+                return driver
+        except UniqueViolation:
+            conn.rollback()
+            raise DuplicateEntryError(f"Driver with license number {license_number} already exists.")
+        except Exception:
+            conn.rollback()
+            raise
+
+def update_driver(
+    driver_id: int,
+    updates: Dict[str, Any],
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    if not updates:
+        return get_driver_by_id(driver_id, conn_string)
+        
+    fields = []
+    params = []
+    for k, v in updates.items():
+        fields.append(f"{k} = %s")
+        params.append(v)
+    params.append(driver_id)
+    
+    query = f"""
+        UPDATE drivers
+        SET {', '.join(fields)}
+        WHERE id = %s
+        RETURNING id, name, license_number, license_category, license_expiry_date, contact_number, safety_score, status, created_at
+    """
+    
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                driver = cur.fetchone()
+                if not driver:
+                    raise EntityNotFoundError(f"Driver {driver_id} not found.")
+                conn.commit()
+                return driver
+        except UniqueViolation:
+            conn.rollback()
+            raise DuplicateEntryError("A driver with this license number already exists.")
+        except Exception:
+            conn.rollback()
+            raise
+
+def delete_driver(
+    driver_id: int,
+    conn_string: str = CONN_STRING
+) -> None:
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT status FROM drivers WHERE id = %s", (driver_id,))
+                driver = cur.fetchone()
+                if not driver:
+                    raise EntityNotFoundError(f"Driver {driver_id} not found.")
+                cur.execute("DELETE FROM drivers WHERE id = %s", (driver_id,))
+                conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+def get_driver_by_id(
+    driver_id: int,
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    with get_connection(conn_string) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, name, license_number, license_category, license_expiry_date, contact_number, safety_score, status, created_at
+                FROM drivers WHERE id = %s
+                """,
+                (driver_id,)
+            )
+            driver = cur.fetchone()
+            if not driver:
+                raise EntityNotFoundError(f"Driver {driver_id} not found.")
+            return driver
+
+
+# =====================================================================
+# TRIPS CREATION & LIFECYCLE
+# =====================================================================
+
+def create_trip(
+    source: str,
+    destination: str,
+    vehicle_id: int,
+    driver_id: int,
+    cargo_weight: float,
+    planned_distance: float,
+    revenue: float = 0.0,
+    status: str = "Draft",
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    if status == "Dispatched":
+        return dispatch_trip(
+            vehicle_id=vehicle_id,
+            driver_id=driver_id,
+            cargo_weight=cargo_weight,
+            source=source,
+            destination=destination,
+            planned_distance=planned_distance,
+            revenue=revenue,
+            conn_string=conn_string
+        )
+        
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM vehicles WHERE id = %s", (vehicle_id,))
+                if not cur.fetchone():
+                    raise EntityNotFoundError(f"Vehicle {vehicle_id} not found.")
+                cur.execute("SELECT id FROM drivers WHERE id = %s", (driver_id,))
+                if not cur.fetchone():
+                    raise EntityNotFoundError(f"Driver {driver_id} not found.")
+                
+                cur.execute(
+                    """
+                    INSERT INTO trips
+                        (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, source, destination, vehicle_id, driver_id, cargo_weight,
+                              planned_distance, final_odometer, fuel_consumed_liters, revenue, status, created_at
+                    """,
+                    (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status)
+                )
+                trip = cur.fetchone()
+                conn.commit()
+                return trip
+        except Exception:
+            conn.rollback()
+            raise
+
+def dispatch_trip_by_id(
+    trip_id: int,
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT vehicle_id, driver_id, cargo_weight, status FROM trips WHERE id = %s FOR UPDATE",
+                    (trip_id,)
+                )
+                trip = cur.fetchone()
+                if not trip:
+                    raise EntityNotFoundError(f"Trip {trip_id} not found.")
+                if trip["status"] != "Draft":
+                    raise InvalidStatusTransitionError(
+                        f"Trip {trip_id} status is '{trip['status']}', expected 'Draft' for dispatching."
+                    )
+                
+                vehicle_id = trip["vehicle_id"]
+                driver_id = trip["driver_id"]
+                cargo_weight = float(trip["cargo_weight"])
+                
+                cur.execute(
+                    "SELECT max_load_capacity, status FROM vehicles WHERE id = %s FOR UPDATE",
+                    (vehicle_id,)
+                )
+                vehicle = cur.fetchone()
+                if not vehicle:
+                    raise EntityNotFoundError(f"Vehicle {vehicle_id} not found.")
+                if vehicle["status"] != "Available":
+                    raise ResourceUnavailableError(
+                        f"Vehicle {vehicle_id} is '{vehicle['status']}', expected 'Available'."
+                    )
+                if cargo_weight > float(vehicle["max_load_capacity"]):
+                    raise CapacityExceededError(
+                        f"Cargo weight {cargo_weight}kg exceeds vehicle capacity {vehicle['max_load_capacity']}kg."
+                    )
+
+                cur.execute(
+                    "SELECT status FROM drivers WHERE id = %s FOR UPDATE",
+                    (driver_id,)
+                )
+                driver = cur.fetchone()
+                if not driver:
+                    raise EntityNotFoundError(f"Driver {driver_id} not found.")
+                if driver["status"] != "Available":
+                    raise ResourceUnavailableError(
+                        f"Driver {driver_id} is '{driver['status']}', expected 'Available'."
+                    )
+
+                cur.execute(
+                    """
+                    UPDATE trips
+                    SET status = 'Dispatched'
+                    WHERE id = %s
+                    RETURNING id, source, destination, vehicle_id, driver_id, cargo_weight,
+                              planned_distance, final_odometer, fuel_consumed_liters, revenue, status, created_at
+                    """,
+                    (trip_id,)
+                )
+                updated_trip = cur.fetchone()
+
+                cur.execute("UPDATE vehicles SET status = 'On Trip' WHERE id = %s", (vehicle_id,))
+                cur.execute("UPDATE drivers SET status = 'On Trip' WHERE id = %s", (driver_id,))
+                conn.commit()
+                return updated_trip
+        except Exception:
+            conn.rollback()
+            raise
+
+def cancel_trip(
+    trip_id: int,
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT vehicle_id, driver_id, status FROM trips WHERE id = %s FOR UPDATE",
+                    (trip_id,)
+                )
+                trip = cur.fetchone()
+                if not trip:
+                    raise EntityNotFoundError(f"Trip {trip_id} not found.")
+                
+                if trip["status"] in ("Completed", "Cancelled"):
+                    raise InvalidStatusTransitionError(
+                        f"Cannot cancel trip {trip_id} with current status '{trip['status']}'."
+                    )
+                
+                old_status = trip["status"]
+                
+                cur.execute(
+                    """
+                    UPDATE trips
+                    SET status = 'Cancelled'
+                    WHERE id = %s
+                    RETURNING id, source, destination, vehicle_id, driver_id, cargo_weight,
+                              planned_distance, final_odometer, fuel_consumed_liters, revenue, status, created_at
+                    """,
+                    (trip_id,)
+                )
+                updated_trip = cur.fetchone()
+                
+                if old_status == "Dispatched":
+                    vehicle_id = trip["vehicle_id"]
+                    driver_id = trip["driver_id"]
+                    cur.execute("UPDATE vehicles SET status = 'Available' WHERE id = %s", (vehicle_id,))
+                    cur.execute("UPDATE drivers SET status = 'Available' WHERE id = %s", (driver_id,))
+                    
+                conn.commit()
+                return updated_trip
+        except Exception:
+            conn.rollback()
+            raise
+
+
+# =====================================================================
+# DASHBOARD / STATISTICS
+# =====================================================================
+
+def get_dashboard_kpis(
+    vehicle_type: Optional[str] = None,
+    status: Optional[str] = None,
+    region: Optional[str] = None,
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    filters = []
+    params = []
+    if vehicle_type:
+        filters.append("type = %s")
+        params.append(vehicle_type)
+    if status:
+        filters.append("status = %s")
+        params.append(status)
+    if region:
+        filters.append("region = %s")
+        params.append(region)
+        
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+    
+    with get_connection(conn_string) as conn:
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT COUNT(*) as total, SUM(CASE WHEN status = 'On Trip' THEN 1 ELSE 0 END) as active, SUM(CASE WHEN status = 'Available' THEN 1 ELSE 0 END) as available, SUM(CASE WHEN status = 'In Shop' THEN 1 ELSE 0 END) as shop FROM vehicles {where_clause}", params)
+            v_stats = cur.fetchone()
+            total_vehicles = v_stats["total"] or 0
+            active_vehicles = v_stats["active"] or 0
+            available_vehicles = v_stats["available"] or 0
+            in_maintenance = v_stats["shop"] or 0
+            
+            if where_clause:
+                trip_query_active = f"SELECT COUNT(*) FROM trips WHERE status = 'Dispatched' AND vehicle_id IN (SELECT id FROM vehicles {where_clause})"
+                trip_query_pending = f"SELECT COUNT(*) FROM trips WHERE status = 'Draft' AND vehicle_id IN (SELECT id FROM vehicles {where_clause})"
+                cur.execute(trip_query_active, params)
+                active_trips = cur.fetchone()["count"] or 0
+                cur.execute(trip_query_pending, params)
+                pending_trips = cur.fetchone()["count"] or 0
+            else:
+                cur.execute("SELECT COUNT(*) FROM trips WHERE status = 'Dispatched'")
+                active_trips = cur.fetchone()["count"] or 0
+                cur.execute("SELECT COUNT(*) FROM trips WHERE status = 'Draft'")
+                pending_trips = cur.fetchone()["count"] or 0
+                
+            cur.execute("SELECT COUNT(*) FROM drivers WHERE status IN ('Available', 'On Trip')")
+            drivers_on_duty = cur.fetchone()["count"] or 0
+            
+            utilization = round((float(active_vehicles) / float(total_vehicles) * 100), 2) if total_vehicles > 0 else 0.0
+            
+            return {
+                "active_vehicles": active_vehicles,
+                "available_vehicles": available_vehicles,
+                "vehicles_in_maintenance": in_maintenance,
+                "active_trips": active_trips,
+                "pending_trips": pending_trips,
+                "drivers_on_duty": drivers_on_duty,
+                "fleet_utilization_pct": utilization
+            }
+
+
+# =====================================================================
+# ALIASES FOR COMPATIBILITY
+# =====================================================================
+calculate_vehicle_roi = get_vehicle_roi_breakdown
+
