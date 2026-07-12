@@ -122,7 +122,7 @@ export default function DashboardPage() {
     getDashboardKPIs(params)
       .then((data: any) => {
         if (cancelled) return;
-        setKpis({ ...defaultKPIs, ...(data ?? {}) });
+        setKpis({ ...defaultKPIs, ...(data?.data ?? {}) });
       })
       .catch(() => {})
       .finally(() => !cancelled && setLoading(false));
