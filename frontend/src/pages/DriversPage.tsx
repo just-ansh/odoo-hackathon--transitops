@@ -115,8 +115,20 @@ export default function DriversPage() {
     setDialogOpen(true);
   };
   const submit = async () => {
-    if (!form.name.trim() || !form.license_number.trim()) {
-      toast.error('Name and license number are required.');
+    if (!form.name.trim() || form.name.trim().length < 2) {
+      toast.error('Name must be at least 2 characters.');
+      return;
+    }
+    if (!form.contact_number.trim() || form.contact_number.trim().length < 5) {
+      toast.error('A valid contact number is required.');
+      return;
+    }
+    if (!form.license_number.trim() || form.license_number.trim().length < 3) {
+      toast.error('License number must be at least 3 characters.');
+      return;
+    }
+    if (!form.license_expiry_date) {
+      toast.error('License expiry date is required.');
       return;
     }
     if (form.safety_score < 0 || form.safety_score > 100) {

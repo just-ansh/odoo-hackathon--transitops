@@ -116,12 +116,28 @@ export default function TripsPage() {
   const filtered = statusFilter === 'all' ? trips : trips.filter((t) => t.status === statusFilter);
 
   const submitTrip = async () => {
-    if (!form.source.trim() || !form.destination.trim()) {
-      toast.error('Source and destination are required.');
+    if (!form.source.trim() || form.source.trim().length < 2) {
+      toast.error('Source location must be at least 2 characters.');
+      return;
+    }
+    if (!form.destination.trim() || form.destination.trim().length < 2) {
+      toast.error('Destination location must be at least 2 characters.');
       return;
     }
     if (!form.vehicle_id || !form.driver_id) {
       toast.error('Select a vehicle and a driver.');
+      return;
+    }
+    if (form.cargo_weight <= 0) {
+      toast.error('Cargo weight must be greater than 0 kg.');
+      return;
+    }
+    if (form.planned_distance <= 0) {
+      toast.error('Planned distance must be greater than 0 km.');
+      return;
+    }
+    if (form.revenue < 0) {
+      toast.error('Revenue cannot be negative.');
       return;
     }
     if (licenseWarning) {

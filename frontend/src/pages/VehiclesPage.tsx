@@ -123,8 +123,28 @@ export default function VehiclesPage() {
     setDialogOpen(true);
   };
   const submit = async () => {
-    if (!form.registration_number.trim() || !form.name_model.trim()) {
-      toast.error('Registration number and model are required.');
+    if (!form.registration_number.trim() || form.registration_number.trim().length < 3) {
+      toast.error('Registration number must be at least 3 characters.');
+      return;
+    }
+    if (!form.name_model.trim() || form.name_model.trim().length < 2) {
+      toast.error('Name / Model must be at least 2 characters.');
+      return;
+    }
+    if (form.max_load_capacity <= 0) {
+      toast.error('Max load capacity must be greater than 0 kg.');
+      return;
+    }
+    if (form.odometer < 0) {
+      toast.error('Odometer reading cannot be negative.');
+      return;
+    }
+    if (form.acquisition_cost <= 0) {
+      toast.error('Acquisition cost must be greater than $0.');
+      return;
+    }
+    if (!form.region?.trim() || form.region.trim().length < 2) {
+      toast.error('Operational region must be at least 2 characters.');
       return;
     }
     try {

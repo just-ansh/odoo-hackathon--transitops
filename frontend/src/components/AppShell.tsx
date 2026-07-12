@@ -24,11 +24,23 @@ const nav = [
   { to: '/reports', label: 'Reports', icon: BarChart3 },
 ] as const;
 
+import { api } from '@/lib/api';
+import { useEffect } from 'react';
+
 export function AppShell({ children }: { children?: ReactNode }) {
   const user = useAuthStore((s) => s.user);
+  const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
   const location = useLocation();
   const pathname = location.pathname;
+
+  useEffect(() => {
+    if (token) {
+      api.get('/auth/me').catch(() => {
+        logout();
+      });
+    }
+  }, [token, logout]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
