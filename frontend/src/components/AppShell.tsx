@@ -47,7 +47,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const pathname = location.pathname;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 text-slate-900 dark:from-slate-950 dark:via-slate-950 dark:to-indigo-950/20 dark:text-slate-100">
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="flex min-h-screen">
         <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200/70 bg-white/70 backdrop-blur-xl lg:flex dark:border-slate-800 dark:bg-slate-950/60">
           <div className="flex h-16 items-center gap-2 px-6">
