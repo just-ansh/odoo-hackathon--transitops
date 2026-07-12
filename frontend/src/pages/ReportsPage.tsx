@@ -105,8 +105,8 @@ export default function ReportsPage() {
             registration_number: b.registration_number,
             name_model: b.name_model,
             revenue: Number(b.total_revenue),
-            fuel_cost: Number(b.total_fuel_cost),
-            maintenance_cost: Number(b.total_maintenance_cost),
+            fuel_cost: Number(b.total_fuel),
+            maintenance_cost: Number(b.total_maintenance),
             other_expense: Number(b.total_other_expense ?? 0),
             acquisition_cost: Number(b.acquisition_cost),
             roi: Number(b.roi),
@@ -313,6 +313,7 @@ export default function ReportsPage() {
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-15} height={50} />
                 <YAxis tick={{ fontSize: 12 }} unit="%" />
                 <Tooltip
+                  formatter={(value: any) => [`${value}%`, 'ROI']}
                   contentStyle={{
                     backgroundColor: 'var(--card)',
                     borderColor: 'var(--border)',
