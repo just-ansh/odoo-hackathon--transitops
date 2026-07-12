@@ -39,6 +39,36 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const { theme, setTheme } = useTheme();
 
   const [healthStatus, setHealthStatus] = useState<'healthy' | 'warning' | 'offline'>('healthy');
+  const [offlineSince, setOfflineSince] = useState<Date | null>(null);
+  const [offlineDuration, setOfflineDuration] = useState<string>('0s');
+
+  useEffect(() => {
+    if (healthStatus !== 'healthy') {
+      if (!offlineSince) {
+        setOfflineSince(new Date());
+      }
+    } else {
+      setOfflineSince(null);
+      setOfflineDuration('0s');
+    }
+  }, [healthStatus, offlineSince]);
+
+  useEffect(() => {
+    if (!offlineSince) return;
+    const updateDuration = () => {
+      const diffMs = new Date().getTime() - offlineSince.getTime();
+      const secs = Math.floor(diffMs / 1000);
+      const mins = Math.floor(secs / 60);
+      if (mins > 0) {
+        setOfflineDuration(`${mins}m ${secs % 60}s`);
+      } else {
+        setOfflineDuration(`${secs}s`);
+      }
+    };
+    updateDuration();
+    const interval = setInterval(updateDuration, 1000);
+    return () => clearInterval(interval);
+  }, [offlineSince]);
 
   useEffect(() => {
     if (token) {
@@ -180,6 +210,18 @@ export function AppShell({ children }: { children?: ReactNode }) {
               </Button>
             </div>
           </header>
+          {healthStatus !== 'healthy' && (
+            <div className="bg-gradient-to-r from-rose-500 to-amber-500 px-4 py-2.5 text-center text-xs font-semibold text-white shadow-sm flex items-center justify-center gap-2 transition-all">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+              </span>
+              <span>
+                <strong>System Offline / DB Unavailable!</strong> Operating in Read-Only Mode. Data cannot be created or edited. 
+                Offline for: <span className="underline font-mono">{offlineDuration}</span>. Showing cached data from last session.
+              </span>
+            </div>
+          )}
           <main className="flex-1 p-4 sm:p-6 lg:p-8">
             <div className="mx-auto w-full max-w-7xl">
               {children || <Outlet />}

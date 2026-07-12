@@ -15,10 +15,35 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Auto-logout on 401
+// Cache GET requests and fallback on failure
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.config.method === 'get') {
+      const cacheKey = `api_cache:${response.config.url}?${JSON.stringify(response.config.params || {})}`;
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(response.data));
+      } catch (e) {
+        // ignore storage errors
+      }
+    }
+    return response;
+  },
   (error) => {
+    const config = error.config;
+    if (config && config.method === 'get') {
+      const cacheKey = `api_cache:${config.url}?${JSON.stringify(config.params || {})}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        console.warn(`Fallback to offline cache for ${config.url}`);
+        return Promise.resolve({
+          data: JSON.parse(cached),
+          status: 200,
+          statusText: 'OK (Cached)',
+          headers: {},
+          config,
+        });
+      }
+    }
     if (error.response?.status === 401) {
       useAuthStore.getState().logout();
       window.location.href = "/login";
