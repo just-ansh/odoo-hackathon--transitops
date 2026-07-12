@@ -173,7 +173,7 @@ def api_get_trips(
 @app.post("/api/dispatch", status_code=201, tags=["Trips"])
 def api_dispatch_trip(
     payload: DispatchTripRequest,
-    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+    _user: dict = Depends(require_roles(FLEET_MANAGER, DRIVER)),
 ):
     """
     **Fleet Manager only.**
@@ -519,7 +519,7 @@ def api_delete_driver(
 @app.post("/api/trips", status_code=201, tags=["Trips"])
 def api_create_trip(
     payload: TripCreate,
-    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+    _user: dict = Depends(require_roles(FLEET_MANAGER, DRIVER)),
 ):
     """
     **Fleet Manager only.**
@@ -548,7 +548,7 @@ def api_create_trip(
 @app.post("/api/trips/{trip_id}/dispatch", tags=["Trips"])
 def api_dispatch_existing_trip(
     trip_id: int,
-    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+    _user: dict = Depends(require_roles(FLEET_MANAGER, DRIVER)),
 ):
     """
     **Fleet Manager only.**
@@ -594,7 +594,7 @@ def api_complete_trip_by_id(
 @app.post("/api/trips/{trip_id}/cancel", tags=["Trips"])
 def api_cancel_trip(
     trip_id: int,
-    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+    _user: dict = Depends(require_roles(FLEET_MANAGER, DRIVER)),
 ):
     """
     **Fleet Manager only.**

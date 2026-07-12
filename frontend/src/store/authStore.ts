@@ -39,6 +39,6 @@ export const roleCan = {
   manageFleet: (role?: UserRole) => role === 'Fleet Manager',
   manageMaintenance: (role?: UserRole) => role === 'Fleet Manager' || role === 'Safety Officer',
   manageFinance: (role?: UserRole) => role === 'Fleet Manager' || role === 'Financial Analyst',
-  createTrips: (role?: UserRole) => role === 'Fleet Manager',
+  createTrips: (role?: UserRole) => role === 'Fleet Manager' || role === 'Driver',
   completeTrips: (role?: UserRole) => role === 'Fleet Manager' || role === 'Driver',
 };
