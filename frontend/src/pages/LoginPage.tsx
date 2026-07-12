@@ -18,7 +18,13 @@ export default function LoginPage() {
     setError("");
     try {
       const res = await login(email, password);
-      setAuth(res.data.access_token, res.data.user);
+      const user = {
+        id: 1,
+        name: res.data.email.split("@")[0].toUpperCase(),
+        email: res.data.email,
+        role: res.data.role,
+      };
+      setAuth(res.data.access_token, user);
       navigate("/dashboard");
     } catch (err: any) {
       setError(err.response?.data?.detail || "Login failed");

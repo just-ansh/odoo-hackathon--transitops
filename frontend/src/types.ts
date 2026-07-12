@@ -1,4 +1,4 @@
-import { UserRole, VehicleStatus, DriverStatus, TripStatus, MaintenanceStatus } from "@/lib/constants";
+import type { UserRole, VehicleStatus, DriverStatus, TripStatus, MaintenanceStatus } from "@/lib/constants";
 
 export interface User {
   id: number;
@@ -24,7 +24,7 @@ export interface Driver {
   name: string;
   license_number: string;
   license_category: string;
-  license_expiry_date: string; // ISO date
+  license_expiry_date: string;
   contact_number: string;
   safety_score: number;
   status: DriverStatus;
@@ -39,11 +39,10 @@ export interface Trip {
   cargo_weight: number;
   planned_distance: number;
   final_odometer: number | null;
-  fuel_consumed: number | null;
+  fuel_consumed_liters: number | null;
+  revenue: number;
   status: TripStatus;
   created_at: string;
-  dispatched_at: string | null;
-  completed_at: string | null;
 }
 
 export interface MaintenanceLog {
@@ -52,7 +51,7 @@ export interface MaintenanceLog {
   description: string;
   cost: number;
   status: MaintenanceStatus;
-  created_at: string;
+  logged_at: string;
   closed_at: string | null;
 }
 
@@ -61,24 +60,15 @@ export interface FuelLog {
   vehicle_id: number;
   liters: number;
   cost: number;
-  date: string;
+  logged_date: string;
+  trip_id: number | null;
 }
 
 export interface Expense {
   id: number;
   vehicle_id: number;
-  category: string;
+  type: 'Tolls' | 'Maintenance' | 'Other';
   amount: number;
-  date: string;
-  notes: string | null;
-}
-
-export interface DashboardKPIs {
-  active_vehicles: number;
-  available_vehicles: number;
-  vehicles_in_maintenance: number;
-  active_trips: number;
-  pending_trips: number;
-  drivers_on_duty: number;
-  fleet_utilization_pct: number;
+  description: string;
+  logged_date: string;
 }
