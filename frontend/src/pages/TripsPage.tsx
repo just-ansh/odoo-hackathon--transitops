@@ -254,6 +254,7 @@ export default function TripsPage() {
                 <TableRow>
                   <TableHead>#</TableHead>
                   <TableHead>Route</TableHead>
+                  <TableHead>Timeline</TableHead>
                   <TableHead>Vehicle</TableHead>
                   <TableHead>Driver</TableHead>
                   <TableHead>Cargo (kg)</TableHead>
@@ -266,7 +267,7 @@ export default function TripsPage() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-10 text-center text-sm text-slate-500">
+                    <TableCell colSpan={10} className="py-10 text-center text-sm text-slate-500">
                       No trips found.
                     </TableCell>
                   </TableRow>
@@ -284,6 +285,23 @@ export default function TripsPage() {
                           <div className="font-medium">
                             {t.source} → {t.destination}
                           </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500 whitespace-nowrap">
+                          {t.start_date ? (
+                            <div>
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">Start:</span>{' '}
+                              {new Date(t.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                              {t.end_date && (
+                                <>
+                                  <br />
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">End:</span>{' '}
+                                  {new Date(t.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="italic text-slate-400">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm">
                           {v ? `${v.registration_number}` : `#${t.vehicle_id}`}

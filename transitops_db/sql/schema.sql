@@ -105,6 +105,8 @@ CREATE TABLE trips (
     fuel_consumed_liters NUMERIC(10, 2) CHECK (fuel_consumed_liters >= 0),
     revenue NUMERIC(12, 2) DEFAULT 0.0 NOT NULL CHECK (revenue >= 0),
     status trip_status DEFAULT 'Draft' NOT NULL,
+    start_date DATE,
+    end_date DATE,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL,
     
     -- Constraint validation

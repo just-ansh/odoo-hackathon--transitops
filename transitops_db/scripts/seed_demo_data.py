@@ -117,14 +117,21 @@ def seed_data():
                     final_odo = float(v["odometer"]) + distance
                     fuel_liters = round(distance / random.uniform(5.0, 12.0), 2)
                 
+                start_date = None
+                end_date = None
+                if status in ("Dispatched", "Completed"):
+                    start_date = trip_date.date()
+                if status == "Completed":
+                    end_date = (trip_date + timedelta(days=random.randint(1, 3))).date()
+
                 cur.execute(
                     """
                     INSERT INTO trips 
-                        (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, final_odometer, fuel_consumed_liters, revenue, status, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, final_odometer, fuel_consumed_liters, revenue, status, start_date, end_date, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id, vehicle_id, revenue
                     """,
-                    (source, dest, v["id"], d["id"], weight, distance, final_odo, fuel_liters, revenue, status, trip_date)
+                    (source, dest, v["id"], d["id"], weight, distance, final_odo, fuel_liters, revenue, status, start_date, end_date, trip_date)
                 )
                 trip = cur.fetchone()
                 

@@ -315,10 +315,10 @@ def dispatch_trip(
                 cur.execute(
                     """
                     INSERT INTO trips
-                        (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'Dispatched')
+                        (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status, start_date)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'Dispatched', CURRENT_DATE)
                     RETURNING id, source, destination, vehicle_id, driver_id, cargo_weight,
-                              planned_distance, revenue, status, created_at
+                              planned_distance, revenue, status, start_date, end_date, created_at
                     """,
                     (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue)
                 )
@@ -390,10 +390,11 @@ def complete_trip(
                     UPDATE trips
                     SET status = 'Completed',
                         final_odometer = %s,
-                        fuel_consumed_liters = %s
+                        fuel_consumed_liters = %s,
+                        end_date = CURRENT_DATE
                     WHERE id = %s
                     RETURNING id, source, destination, vehicle_id, driver_id,
-                              final_odometer, fuel_consumed_liters, revenue, status, created_at
+                              final_odometer, fuel_consumed_liters, revenue, status, start_date, end_date, created_at
                     """,
                     (final_odometer, fuel_consumed_liters, trip_id)
                 )
@@ -976,15 +977,16 @@ def create_trip(
                 if not cur.fetchone():
                     raise EntityNotFoundError(f"Driver {driver_id} not found.")
                 
+                from datetime import date
                 cur.execute(
                     """
                     INSERT INTO trips
-                        (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status, start_date)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id, source, destination, vehicle_id, driver_id, cargo_weight,
-                              planned_distance, final_odometer, fuel_consumed_liters, revenue, status, created_at
+                              planned_distance, final_odometer, fuel_consumed_liters, revenue, status, start_date, end_date, created_at
                     """,
-                    (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status)
+                    (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status, date.today() if status == "Dispatched" else None)
                 )
                 trip = cur.fetchone()
                 conn.commit()
@@ -1047,10 +1049,11 @@ def dispatch_trip_by_id(
                 cur.execute(
                     """
                     UPDATE trips
-                    SET status = 'Dispatched'
+                    SET status = 'Dispatched',
+                        start_date = CURRENT_DATE
                     WHERE id = %s
                     RETURNING id, source, destination, vehicle_id, driver_id, cargo_weight,
-                              planned_distance, final_odometer, fuel_consumed_liters, revenue, status, created_at
+                              planned_distance, final_odometer, fuel_consumed_liters, revenue, status, start_date, end_date, created_at
                     """,
                     (trip_id,)
                 )

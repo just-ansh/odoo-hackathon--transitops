@@ -42,6 +42,8 @@ export interface Trip {
   fuel_consumed_liters: number | null;
   revenue: number;
   status: TripStatus;
+  start_date: string | null;
+  end_date: string | null;
   created_at: string;
 }
 
