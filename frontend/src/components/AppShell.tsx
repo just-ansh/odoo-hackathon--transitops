@@ -11,15 +11,7 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useAuthStore } from '@/store/authStore';
-import { UserRole } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 
 const nav = [
@@ -32,16 +24,8 @@ const nav = [
   { to: '/reports', label: 'Reports', icon: BarChart3 },
 ] as const;
 
-const roles: UserRole[] = [
-  UserRole.FLEET_MANAGER,
-  UserRole.DRIVER,
-  UserRole.SAFETY_OFFICER,
-  UserRole.FINANCIAL_ANALYST,
-];
-
 export function AppShell({ children }: { children?: ReactNode }) {
   const user = useAuthStore((s) => s.user);
-  const setRole = useAuthStore((s) => s.setRole);
   const logout = useAuthStore((s) => s.logout);
   const location = useLocation();
   const pathname = location.pathname;
@@ -109,18 +93,9 @@ export function AppShell({ children }: { children?: ReactNode }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Select value={user?.role} onValueChange={(v) => setRole(v as UserRole)}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {roles.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {r}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <span className="inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-700/10 dark:bg-indigo-950/30 dark:text-indigo-400 dark:ring-indigo-400/20">
+                {user?.role}
+              </span>
               <Button variant="ghost" size="icon" onClick={logout} title="Sign out">
                 <LogOut className="h-4 w-4" />
               </Button>
