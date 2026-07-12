@@ -9,16 +9,16 @@ INSERT INTO users (email, password_hash, role) VALUES
 
 -- 2. Seed 5 Available Vehicles
 INSERT INTO vehicles (registration_number, name_model, type, max_load_capacity, odometer, acquisition_cost, status, region) VALUES
-('TX-8800-V', 'Ford F-550 Super Duty', 'Flatbed', 6500.00, 15000.00, 75000.00, 'Available', 'Texas East'),
-('TX-9900-V', 'Freightliner Cascadia', 'Heavy Hauler', 30000.00, 25000.00, 145000.00, 'Available', 'Texas West'),
-('TX-1111-V', 'Ford Transit', 'Van', 1500.00, 8000.00, 35000.00, 'Available', 'Texas North'),
-('TX-2222-V', 'Chevrolet Express', 'Van', 1800.00, 9000.00, 38000.00, 'Available', 'Texas South'),
-('TX-3333-V', 'Peterbilt 389', 'Heavy Hauler', 30000.00, 12000.00, 155000.00, 'Available', 'Texas West');
+('DL-01-A-1234', 'Tata Prima 4025.S', 'Truck', 25000.00, 15000.00, 75000.00, 'Available', 'Delhi NCR'),
+('MH-02-B-5678', 'Mahindra Blazo X 35', 'Truck', 35000.00, 25000.00, 145000.00, 'Available', 'Mumbai Region'),
+('KA-03-C-9012', 'Tata Winger Cargo', 'Van', 1500.00, 8000.00, 35000.00, 'Available', 'Bangalore South'),
+('TN-04-D-3456', 'Ashok Leyland Dost+', 'Van', 1800.00, 9000.00, 38000.00, 'Available', 'Chennai Coastal'),
+('WB-05-E-7890', 'BharatBenz 2823R', 'Truck', 28000.00, 12000.00, 155000.00, 'Available', 'Kolkata East');
 
 -- 3. Seed 5 Available Drivers
 INSERT INTO drivers (name, license_number, license_category, license_expiry_date, contact_number, safety_score, status) VALUES
-('John Doe', 'CDL-TX-778', 'Class A CDL', '2028-12-31', '+1-555-0100', 98.50, 'Available'),
-('Jane Smith', 'CDL-TX-990', 'Class A CDL', '2029-06-30', '+1-555-0200', 99.80, 'Available'),
-('Bob Johnson', 'CDL-TX-111', 'Class B CDL', '2028-06-30', '+1-555-0300', 95.00, 'Available'),
-('Alice Davis', 'CDL-TX-222', 'Class B CDL', '2029-01-15', '+1-555-0400', 97.20, 'Available'),
-('Charlie Brown', 'CDL-TX-333', 'Class A CDL', '2030-03-22', '+1-555-0500', 99.00, 'Available');
+('Rajesh Kumar', 'DL-1420200012345', 'CDL-A', '2028-12-31', '+91-98765-43210', 98.50, 'Available'),
+('Amit Singh', 'MH-4320190054321', 'CDL-A', '2029-06-30', '+91-91234-56789', 99.80, 'Available'),
+('Srinivas Rao', 'KA-5120180098765', 'CDL-B', '2028-06-30', '+91-88888-88888', 95.00, 'Available'),
+('Ananya Patel', 'GJ-0120210067890', 'CDL-B', '2029-01-15', '+91-77777-77777', 97.20, 'Available'),
+('Vikram Chatterjee', 'WB-0220220024680', 'CDL-A', '2030-03-22', '+91-99999-99999', 99.00, 'Available');
