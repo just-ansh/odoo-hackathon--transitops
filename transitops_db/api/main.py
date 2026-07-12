@@ -1,28 +1,45 @@
 """
 TransitOps FastAPI Web App Server (api/main.py)
 -----------------------------------------------
-Full REST API covering all CRUD operations, transactions, and analytics.
+Full REST API with JWT authentication and role-based access control (RBAC).
 
-Author: Developer 1 (Senior Database Architect & Backend Engineer)
+Auth Flow:
+  1. POST /api/auth/login  → receive JWT token
+  2. Add header to all requests: Authorization: Bearer <token>
+  3. Unauthorized → 401.  Wrong role → 403.
 
-NOTE ON AUTH:
-  Authentication (login + RBAC) is intentionally OUT OF SCOPE for this
-  hackathon submission. Both team members agreed to drop it due to the
-  strict 8-hour time budget. All endpoints are publicly accessible.
-  If the rubric penalises this, a stub JWT middleware can be added in
-  under 30 minutes using python-jose, but business logic will be unaffected.
+RBAC Matrix:
+  Fleet Manager    → full access to all endpoints
+  Driver           → GET vehicles/drivers/trips, POST /api/complete
+  Safety Officer   → GET vehicles/drivers/trips/maintenance,
+                     POST /api/maintenance/open, POST /api/maintenance/close
+  Financial Analyst→ GET trips/fuel-logs/expenses/roi,
+                     POST /api/fuel-logs, POST /api/expenses
+
+Author: Developer 1 (Senior Backend Engineer)
 """
 
 import os
 import sys
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Query, status
+
+from fastapi import FastAPI, HTTPException, Query, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg.errors import UniqueViolation
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core import database
+from core.auth import (
+    require_roles,
+    get_current_user,
+    FLEET_MANAGER,
+    DRIVER,
+    SAFETY_OFFICER,
+    FINANCIAL_ANALYST,
+    ALL_ROLES,
+)
+from api import auth_routes
 from api.schemas import (
     DispatchTripRequest,
     CompleteTripRequest,
@@ -35,21 +52,28 @@ from api.schemas import (
 app = FastAPI(
     title="TransitOps API",
     description="""
-Smart Transport Operations Platform — Hackathon Build.
+## Smart Transport Operations Platform
 
-## Auth Note
-Authentication is **out of scope** for this build. All endpoints are open.
+### Authentication
+All endpoints (except `/api/auth/login` and `/api/health`) require a Bearer token.
 
-## Error Codes
-- `400` — Business logic validation failure (busy resource, capacity exceeded, duplicate entry, etc.)
-- `404` — Requested entity does not exist
-- `500` — Unexpected server or database error
-- `503` — Database connection is down (health check failure)
+1. Call `POST /api/auth/login` with email + password.
+2. Copy the returned `access_token`.
+3. Click **Authorize** (top-right 🔒) in Swagger UI and paste the token.
+4. All subsequent requests will include the token automatically.
+
+### RBAC Roles
+| Role | Permissions |
+|------|------------|
+| Fleet Manager | Full access to all endpoints |
+| Driver | View fleet/trips, complete own trips |
+| Safety Officer | View fleet/trips, manage maintenance |
+| Financial Analyst | View trips/roi, manage fuel logs & expenses |
     """,
-    version="1.0.0",
+    version="2.0.0",
 )
 
-# Allow all origins so the frontend (any host/port) can call the API
+# Allow frontend on any origin/port to call the API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -58,19 +82,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Register auth router (login + me — no RBAC on these)
+app.include_router(auth_routes.router)
+
 
 # =====================================================================
-# HEALTH CHECK
+# HEALTH CHECK (public — no auth required)
 # =====================================================================
 
 @app.get("/api/health", tags=["Health"])
 def health_check():
     """
-    Checks whether the API and database are reachable.
-
-    Returns:
-    - `200 {"status": "healthy", "database": "connected"}` — Everything is up.
-    - `503 {"detail": "Database connection unhealthy: <reason>"}` — API is up but DB is down.
+    Public endpoint. Checks API and database connectivity.
+    - `200` → healthy
+    - `503` → API up but database is unreachable
     """
     try:
         conn = database.get_connection()
@@ -79,37 +104,42 @@ def health_check():
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Database connection unhealthy: {e}"
+            detail=f"Database connection unhealthy: {e}",
         )
 
 
 # =====================================================================
-# VEHICLES
+# VEHICLES  (all roles can read)
 # =====================================================================
 
 @app.get("/api/vehicles", tags=["Vehicles"])
 def api_get_vehicles(
-    status: Optional[str] = Query(default=None, description="Filter by status: Available, On Trip, In Shop, Retired"),
-    type: Optional[str] = Query(default=None, description="Filter by vehicle type e.g. Flatbed, Heavy Hauler"),
+    status_filter: Optional[str] = Query(default=None, alias="status",
+        description="Filter: Available | On Trip | In Shop | Retired"),
+    type: Optional[str] = Query(default=None,
+        description="Filter by vehicle type e.g. Flatbed, Heavy Hauler"),
+    _user: dict = Depends(require_roles(*ALL_ROLES)),
 ):
-    """Returns all vehicles. Supports optional filtering by `status` and/or `type`."""
+    """Returns all vehicles. Any authenticated role may call this."""
     try:
-        return database.get_vehicles(status=status, type=type)
+        return database.get_vehicles(status=status_filter, type=type)
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =====================================================================
-# DRIVERS
+# DRIVERS  (all roles can read)
 # =====================================================================
 
 @app.get("/api/drivers", tags=["Drivers"])
 def api_get_drivers(
-    status: Optional[str] = Query(default=None, description="Filter by status: Available, On Trip, Off Duty, Suspended"),
+    status_filter: Optional[str] = Query(default=None, alias="status",
+        description="Filter: Available | On Trip | Off Duty | Suspended"),
+    _user: dict = Depends(require_roles(*ALL_ROLES)),
 ):
-    """Returns all drivers. Supports optional filtering by `status`."""
+    """Returns all drivers. Any authenticated role may call this."""
     try:
-        return database.get_drivers(status=status)
+        return database.get_drivers(status=status_filter)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -120,24 +150,29 @@ def api_get_drivers(
 
 @app.get("/api/trips", tags=["Trips"])
 def api_get_trips(
-    status: Optional[str] = Query(default=None, description="Filter by status: Draft, Dispatched, Completed, Cancelled"),
-    vehicle_id: Optional[int] = Query(default=None, description="Filter by vehicle ID"),
-    driver_id: Optional[int] = Query(default=None, description="Filter by driver ID"),
+    status_filter: Optional[str] = Query(default=None, alias="status",
+        description="Filter: Draft | Dispatched | Completed | Cancelled"),
+    vehicle_id: Optional[int] = Query(default=None),
+    driver_id: Optional[int] = Query(default=None),
+    _user: dict = Depends(require_roles(*ALL_ROLES)),
 ):
-    """Returns all trips. Supports optional filtering by `status`, `vehicle_id`, and/or `driver_id`."""
+    """Returns all trips. Any authenticated role may call this."""
     try:
-        return database.get_trips(status=status, vehicle_id=vehicle_id, driver_id=driver_id)
+        return database.get_trips(
+            status=status_filter, vehicle_id=vehicle_id, driver_id=driver_id
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/dispatch", status_code=status.HTTP_201_CREATED, tags=["Trips"])
-def api_dispatch_trip(payload: DispatchTripRequest):
+@app.post("/api/dispatch", status_code=201, tags=["Trips"])
+def api_dispatch_trip(
+    payload: DispatchTripRequest,
+    _user: dict = Depends(require_roles(FLEET_MANAGER)),
+):
     """
-    Dispatches a new trip (atomic transaction).
-    - Vehicle must be 'Available' and have sufficient load capacity.
-    - Driver must be 'Available'.
-    - Both are immediately set to 'On Trip' on success.
+    **Fleet Manager only.**
+    Dispatches a new trip. Vehicle and driver must both be 'Available'.
     """
     try:
         trip = database.dispatch_trip(
@@ -159,12 +194,13 @@ def api_dispatch_trip(payload: DispatchTripRequest):
 
 
 @app.post("/api/complete", tags=["Trips"])
-def api_complete_trip(payload: CompleteTripRequest):
+def api_complete_trip(
+    payload: CompleteTripRequest,
+    _user: dict = Depends(require_roles(FLEET_MANAGER, DRIVER)),
+):
     """
-    Completes a dispatched trip (atomic transaction).
-    - Trip must be in 'Dispatched' status.
-    - `final_odometer` must be >= current vehicle odometer.
-    - Both vehicle and driver are returned to 'Available' on success.
+    **Fleet Manager or Driver.**
+    Completes a dispatched trip. Records final odometer and fuel consumed.
     """
     try:
         trip = database.complete_trip(
@@ -187,23 +223,26 @@ def api_complete_trip(payload: CompleteTripRequest):
 
 @app.get("/api/maintenance", tags=["Maintenance"])
 def api_get_maintenance_logs(
-    vehicle_id: Optional[int] = Query(default=None, description="Filter by vehicle ID"),
-    status: Optional[str] = Query(default=None, description="Filter by status: Open, Closed"),
+    vehicle_id: Optional[int] = Query(default=None),
+    status_filter: Optional[str] = Query(default=None, alias="status",
+        description="Filter: Open | Closed"),
+    _user: dict = Depends(require_roles(FLEET_MANAGER, SAFETY_OFFICER)),
 ):
-    """Returns all maintenance logs. Supports optional filtering by `vehicle_id` and/or `status`."""
+    """**Fleet Manager or Safety Officer.** Returns all maintenance logs."""
     try:
-        return database.get_maintenance_logs(vehicle_id=vehicle_id, status=status)
+        return database.get_maintenance_logs(
+            vehicle_id=vehicle_id, status=status_filter
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/maintenance/open", status_code=status.HTTP_201_CREATED, tags=["Maintenance"])
-def api_open_maintenance(payload: OpenMaintenanceRequest):
-    """
-    Opens a maintenance log (atomic transaction).
-    - Vehicle must exist and must not be 'Retired'.
-    - Vehicle status is immediately set to 'In Shop'.
-    """
+@app.post("/api/maintenance/open", status_code=201, tags=["Maintenance"])
+def api_open_maintenance(
+    payload: OpenMaintenanceRequest,
+    _user: dict = Depends(require_roles(FLEET_MANAGER, SAFETY_OFFICER)),
+):
+    """**Fleet Manager or Safety Officer.** Opens a maintenance log. Sets vehicle to 'In Shop'."""
     try:
         log = database.open_maintenance(
             vehicle_id=payload.vehicle_id,
@@ -219,19 +258,17 @@ def api_open_maintenance(payload: OpenMaintenanceRequest):
 
 
 @app.post("/api/maintenance/close", tags=["Maintenance"])
-def api_close_maintenance(payload: CloseMaintenanceRequest):
-    """
-    Closes an open maintenance log (atomic transaction).
-    - Log must be in 'Open' status.
-    - Records the final cost and timestamps the closure.
-    - Vehicle is immediately restored to 'Available'.
-    """
+def api_close_maintenance(
+    payload: CloseMaintenanceRequest,
+    _user: dict = Depends(require_roles(FLEET_MANAGER, SAFETY_OFFICER)),
+):
+    """**Fleet Manager or Safety Officer.** Closes maintenance log. Restores vehicle to 'Available'."""
     try:
-        log = database.close_maintenance(
-            log_id=payload.log_id,
-            cost=payload.cost,
-        )
-        return {"message": "Maintenance log closed and vehicle restored to Available", "maintenance_log": log}
+        log = database.close_maintenance(log_id=payload.log_id, cost=payload.cost)
+        return {
+            "message": "Maintenance log closed and vehicle restored to Available",
+            "maintenance_log": log,
+        }
     except database.EntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except database.InvalidStatusTransitionError as e:
@@ -246,19 +283,23 @@ def api_close_maintenance(payload: CloseMaintenanceRequest):
 
 @app.get("/api/fuel-logs", tags=["Fuel Logs"])
 def api_get_fuel_logs(
-    vehicle_id: Optional[int] = Query(default=None, description="Filter by vehicle ID"),
-    trip_id: Optional[int] = Query(default=None, description="Filter by trip ID"),
+    vehicle_id: Optional[int] = Query(default=None),
+    trip_id: Optional[int] = Query(default=None),
+    _user: dict = Depends(require_roles(FLEET_MANAGER, FINANCIAL_ANALYST)),
 ):
-    """Returns all fuel log entries. Supports optional filtering by `vehicle_id` and/or `trip_id`."""
+    """**Fleet Manager or Financial Analyst.** Returns all fuel log entries."""
     try:
         return database.get_fuel_logs(vehicle_id=vehicle_id, trip_id=trip_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/fuel-logs", status_code=status.HTTP_201_CREATED, tags=["Fuel Logs"])
-def api_add_fuel_log(payload: AddFuelLogRequest):
-    """Records a new fuel purchase for a vehicle, optionally linked to a trip."""
+@app.post("/api/fuel-logs", status_code=201, tags=["Fuel Logs"])
+def api_add_fuel_log(
+    payload: AddFuelLogRequest,
+    _user: dict = Depends(require_roles(FLEET_MANAGER, FINANCIAL_ANALYST)),
+):
+    """**Fleet Manager or Financial Analyst.** Records a fuel purchase for a vehicle."""
     try:
         log = database.add_fuel_log(
             vehicle_id=payload.vehicle_id,
@@ -280,19 +321,24 @@ def api_add_fuel_log(payload: AddFuelLogRequest):
 
 @app.get("/api/expenses", tags=["Expenses"])
 def api_get_expenses(
-    vehicle_id: Optional[int] = Query(default=None, description="Filter by vehicle ID"),
-    type: Optional[str] = Query(default=None, description="Filter by type: Tolls, Maintenance, Other"),
+    vehicle_id: Optional[int] = Query(default=None),
+    type: Optional[str] = Query(default=None,
+        description="Filter: Tolls | Maintenance | Other"),
+    _user: dict = Depends(require_roles(FLEET_MANAGER, FINANCIAL_ANALYST)),
 ):
-    """Returns all expense entries. Supports optional filtering by `vehicle_id` and/or `type`."""
+    """**Fleet Manager or Financial Analyst.** Returns all expense entries."""
     try:
         return database.get_expenses(vehicle_id=vehicle_id, type=type)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/expenses", status_code=status.HTTP_201_CREATED, tags=["Expenses"])
-def api_add_expense(payload: AddExpenseRequest):
-    """Records a new operational expense (Tolls, Maintenance, Other) for a vehicle."""
+@app.post("/api/expenses", status_code=201, tags=["Expenses"])
+def api_add_expense(
+    payload: AddExpenseRequest,
+    _user: dict = Depends(require_roles(FLEET_MANAGER, FINANCIAL_ANALYST)),
+):
+    """**Fleet Manager or Financial Analyst.** Records an operational expense."""
     try:
         expense = database.add_expense(
             vehicle_id=payload.vehicle_id,
@@ -311,12 +357,14 @@ def api_add_expense(payload: AddExpenseRequest):
 
 
 # =====================================================================
-# ROI / ANALYTICS
+# ANALYTICS / ROI
 # =====================================================================
 
 @app.get("/api/roi", tags=["Analytics"])
-def api_get_fleet_roi():
-    """Returns aggregated fleet-wide ROI metrics (revenue, costs, ROI ratio)."""
+def api_get_fleet_roi(
+    _user: dict = Depends(require_roles(FLEET_MANAGER, FINANCIAL_ANALYST)),
+):
+    """**Fleet Manager or Financial Analyst.** Fleet-wide aggregated ROI metrics."""
     try:
         return {"roi_metrics": database.get_fleet_roi()}
     except Exception as e:
@@ -324,12 +372,10 @@ def api_get_fleet_roi():
 
 
 @app.get("/api/roi/vehicles", tags=["Analytics"])
-def api_get_vehicle_roi_breakdown():
-    """
-    Returns a per-vehicle breakdown of ROI metrics.
-    Includes revenue, maintenance cost, fuel cost, and individual ROI per vehicle.
-    Uses pre-aggregated subqueries to prevent row-multiplication inaccuracies.
-    """
+def api_get_vehicle_roi_breakdown(
+    _user: dict = Depends(require_roles(FLEET_MANAGER, FINANCIAL_ANALYST)),
+):
+    """**Fleet Manager or Financial Analyst.** Per-vehicle ROI breakdown."""
     try:
         return {"vehicle_roi_breakdown": database.get_vehicle_roi_breakdown()}
     except Exception as e:

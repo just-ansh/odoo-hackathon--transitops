@@ -16,7 +16,7 @@ from psycopg.errors import UniqueViolation
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONN_STRING = "host=localhost dbname=transitops user=postgres password=postgres port=5432"
+DEFAULT_CONN_STRING = "host=localhost dbname=transitops user=postgres password=1234 port=5432"
 CONN_STRING = os.getenv("DATABASE_URL", DEFAULT_CONN_STRING)
 
 

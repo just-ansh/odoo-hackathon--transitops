@@ -9,12 +9,25 @@ Author: Developer 1 (Senior Database Architect & Backend Engineer)
 
 from typing import Optional
 from datetime import date
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 
 # =====================================================================
-# TRIP SCHEMAS
+# AUTH SCHEMAS
 # =====================================================================
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., description="Registered user email address")
+    password: str = Field(..., min_length=6, description="Account password")
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    role: str
+    email: str
+
+
 
 class DispatchTripRequest(BaseModel):
     vehicle_id: int = Field(..., description="ID of the vehicle to dispatch")
