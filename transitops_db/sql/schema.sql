@@ -1,4 +1,4 @@
--- TransitOps Database Schema (schema.sql)
+-- TransitOps Database Schema (sql/schema.sql)
 -- Act as an expert Senior Database Architect
 
 DROP TABLE IF EXISTS expenses CASCADE;

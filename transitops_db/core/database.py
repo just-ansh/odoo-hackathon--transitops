@@ -1,6 +1,6 @@
 """
-TransitOps Database Utility Module (database.py)
------------------------------------------------
+TransitOps Database Utility Module (core/database.py)
+-----------------------------------------------------
 Handles raw SQL database connections, row-to-dictionary factory configuration,
 and atomic business logic transactions using row-level locking.
 
@@ -297,7 +297,6 @@ def get_fleet_roi(conn_string: str = CONN_STRING) -> Dict[str, Any]:
         with conn.cursor() as cur:
             cur.execute(query)
             result = cur.fetchone()
-            # If the database has no trips, return a default dictionary
             return result if result else {
                 "total_revenue": 0.0,
                 "total_maintenance_cost": 0.0,

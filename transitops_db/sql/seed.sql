@@ -1,4 +1,4 @@
--- TransitOps Seed Data (seed.sql)
+-- TransitOps Seed Data (sql/seed.sql)
 -- Act as an expert Senior Database Architect
 
 TRUNCATE TABLE expenses, fuel_logs, maintenance_logs, trips, drivers, vehicles, users RESTART IDENTITY CASCADE;

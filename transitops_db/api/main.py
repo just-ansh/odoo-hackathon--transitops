@@ -1,44 +1,27 @@
 """
-TransitOps FastAPI Web App Server (main.py)
-------------------------------------------
+TransitOps FastAPI Web App Server (api/main.py)
+-----------------------------------------------
 Wraps transaction business logic functions into standard API routes,
 validating inputs using Pydantic models.
 
 Author: Developer 1 (Senior Database Architect & Backend Engineer)
 """
 
+import os
+import sys
 from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel, Field
-import database
+
+# Resolve sys.path to allow running from any parent directory
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from core import database
+from api.schemas import DispatchTripRequest, CompleteTripRequest, OpenMaintenanceRequest
 
 app = FastAPI(
     title="TransitOps API",
     description="Smart Transport Operations Platform API for Hackathon",
     version="1.0.0"
 )
-
-# =====================================================================
-# PYDANTIC SCHEMAS FOR API INPUTS
-# =====================================================================
-
-class DispatchTripRequest(BaseModel):
-    vehicle_id: int = Field(..., description="ID of the vehicle to dispatch")
-    driver_id: int = Field(..., description="ID of the driver to dispatch")
-    cargo_weight: float = Field(..., gt=0, description="Cargo weight in kg")
-    source: str = Field(..., min_length=2, max_length=150, description="Source location")
-    destination: str = Field(..., min_length=2, max_length=150, description="Destination location")
-    planned_distance: float = Field(..., gt=0, description="Planned trip distance in miles/km")
-    revenue: float = Field(default=0.0, ge=0, description="Projected/agreed revenue for the trip")
-
-class CompleteTripRequest(BaseModel):
-    trip_id: int = Field(..., description="ID of the trip to complete")
-    final_odometer: float = Field(..., description="Final odometer reading of the vehicle")
-    fuel_consumed: float = Field(..., ge=0, description="Liters of fuel consumed during the trip")
-
-class OpenMaintenanceRequest(BaseModel):
-    vehicle_id: int = Field(..., description="ID of the vehicle to place in maintenance")
-    description: str = Field(..., min_length=5, description="Details of the maintenance log")
-
 
 # =====================================================================
 # API ROUTE ENDPOINTS

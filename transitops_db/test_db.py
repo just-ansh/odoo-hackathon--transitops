@@ -14,7 +14,7 @@ import os
 import sys
 import psycopg
 from psycopg.rows import dict_row
-from database import (
+from core.database import (
     CONN_STRING,
     get_connection,
     dispatch_trip,
@@ -73,8 +73,8 @@ def reset_database():
 def main():
     # Get base directory of this script to locate schema and seed sql files
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    schema_file = os.path.join(base_dir, "schema.sql")
-    seed_file = os.path.join(base_dir, "seed.sql")
+    schema_file = os.path.join(base_dir, "sql", "schema.sql")
+    seed_file = os.path.join(base_dir, "sql", "seed.sql")
 
     # 1. Reset and Rebuild Database
     reset_database()
