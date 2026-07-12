@@ -18,7 +18,7 @@ api.interceptors.request.use((config) => {
 // Cache GET requests and fallback on failure
 api.interceptors.response.use(
   (response) => {
-    if (response.config.method === 'get') {
+    if (response.config.method === 'get' && !response.config.url?.endsWith('health')) {
       const cacheKey = `api_cache:${response.config.url}?${JSON.stringify(response.config.params || {})}`;
       try {
         localStorage.setItem(cacheKey, JSON.stringify(response.data));
@@ -30,7 +30,7 @@ api.interceptors.response.use(
   },
   (error) => {
     const config = error.config;
-    if (config && config.method === 'get') {
+    if (config && config.method === 'get' && !config.url?.endsWith('health')) {
       const cacheKey = `api_cache:${config.url}?${JSON.stringify(config.params || {})}`;
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
