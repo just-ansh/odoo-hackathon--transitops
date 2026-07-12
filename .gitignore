@@ -1,0 +1,22 @@
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# Database connection credentials / environment configurations
+.env
+.env.local
+
+# IDE/OS configurations
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
