@@ -295,7 +295,7 @@ def dispatch_trip(
                     )
 
                 cur.execute(
-                    "SELECT status FROM drivers WHERE id = %s FOR UPDATE",
+                    "SELECT status, license_expiry_date FROM drivers WHERE id = %s FOR UPDATE",
                     (driver_id,)
                 )
                 driver = cur.fetchone()
@@ -304,6 +304,12 @@ def dispatch_trip(
                 if driver["status"] != "Available":
                     raise ResourceUnavailableError(
                         f"Driver {driver_id} is '{driver['status']}', expected 'Available'."
+                    )
+                
+                from datetime import date
+                if driver["license_expiry_date"] < date.today():
+                    raise ResourceUnavailableError(
+                        f"Driver {driver_id} license has expired on {driver['license_expiry_date']}. Cannot assign to trip."
                     )
 
                 cur.execute(
@@ -494,9 +500,15 @@ def close_maintenance(
                 updated_log = cur.fetchone()
 
                 cur.execute(
-                    "UPDATE vehicles SET status = 'Available' WHERE id = %s",
+                    "SELECT status FROM vehicles WHERE id = %s FOR UPDATE",
                     (vehicle_id,)
                 )
+                vehicle = cur.fetchone()
+                if vehicle and vehicle["status"] != "Retired":
+                    cur.execute(
+                        "UPDATE vehicles SET status = 'Available' WHERE id = %s",
+                        (vehicle_id,)
+                    )
                 conn.commit()
                 return updated_log
         except Exception:
