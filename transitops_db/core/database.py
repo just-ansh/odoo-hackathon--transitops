@@ -147,7 +147,7 @@ def get_trips(
     where = f"WHERE {' AND '.join(filters)}" if filters else ""
     query = f"""
         SELECT id, source, destination, vehicle_id, driver_id, cargo_weight,
-               planned_distance, final_odometer, fuel_consumed_liters, revenue, status, created_at
+               planned_distance, final_odometer, fuel_consumed_liters, revenue, status, start_date, end_date, created_at
         FROM trips
         {where}
         ORDER BY created_at DESC
