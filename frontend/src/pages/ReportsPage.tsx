@@ -63,6 +63,8 @@ export default function ReportsPage() {
   const [fleet, setFleet] = useState<FleetRoi | null>(null);
   const [rows, setRows] = useState<VehicleRoiRow[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [startIndex, setStartIndex] = useState(0);
+  const pageSize = 12;
 
   useEffect(() => {
     (async () => {
@@ -183,11 +185,11 @@ export default function ReportsPage() {
 
   const chartData = useMemo(
     () =>
-      rows.slice(0, 12).map((r) => ({
+      rows.slice(startIndex, startIndex + pageSize).map((r) => ({
         name: r.registration_number ?? `#${r.vehicle_id}`,
         roi: Number((r.roi * 100).toFixed(2)),
       })),
-    [rows],
+    [rows, startIndex],
   );
 
   const exportCsv = () => {
@@ -302,9 +304,26 @@ export default function ReportsPage() {
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card className="border-slate-200/70 lg:col-span-2 dark:border-slate-800">
-          <CardHeader>
-            <CardTitle className="text-base">ROI by Vehicle</CardTitle>
-            <CardDescription>Top 12 vehicles by ROI %</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="text-base">ROI by Vehicle</CardTitle>
+              <CardDescription>Top performing assets comparison chart</CardDescription>
+            </div>
+            {rows.length > pageSize && (
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] text-slate-500">
+                  Vehicles {startIndex + 1}–{Math.min(startIndex + pageSize, rows.length)} of {rows.length}
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max={rows.length - pageSize}
+                  value={startIndex}
+                  onChange={(e) => setStartIndex(Number(e.target.value))}
+                  className="h-1 cursor-pointer rounded-lg bg-slate-200 accent-indigo-600 dark:bg-slate-700 w-24"
+                />
+              </div>
+            )}
           </CardHeader>
           <CardContent className="h-72">
             <ResponsiveContainer width="100%" height="100%">
