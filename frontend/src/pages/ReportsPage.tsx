@@ -312,7 +312,16 @@ export default function ReportsPage() {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-15} height={50} />
                 <YAxis tick={{ fontSize: 12 }} unit="%" />
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--card)',
+                    borderColor: 'var(--border)',
+                    borderRadius: '0.5rem',
+                    color: 'var(--foreground)'
+                  }}
+                  itemStyle={{ color: 'var(--foreground)' }}
+                  labelStyle={{ color: 'var(--muted-foreground)' }}
+                />
                 <Bar dataKey="roi" radius={[6, 6, 0, 0]}>
                   {chartData.map((d, i) => (
                     <Cell

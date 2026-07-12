@@ -271,7 +271,16 @@ export default function DashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--card)',
+                    borderColor: 'var(--border)',
+                    borderRadius: '0.5rem',
+                    color: 'var(--foreground)'
+                  }}
+                  itemStyle={{ color: 'var(--foreground)' }}
+                  labelStyle={{ color: 'var(--muted-foreground)' }}
+                />
                 <Bar dataKey="trips" fill="url(#barGrad)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -290,7 +299,16 @@ export default function DashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'var(--card)',
+                    borderColor: 'var(--border)',
+                    borderRadius: '0.5rem',
+                    color: 'var(--foreground)'
+                  }}
+                  itemStyle={{ color: 'var(--foreground)' }}
+                  labelStyle={{ color: 'var(--muted-foreground)' }}
+                />
                 <Line
                   type="monotone"
                   dataKey="revenue"
