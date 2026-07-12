@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
 
 import LoginPage from "@/pages/LoginPage";
@@ -9,7 +9,6 @@ import TripsPage from "@/pages/TripsPage";
 import MaintenancePage from "@/pages/MaintenancePage";
 import FuelExpensesPage from "@/pages/FuelExpensesPage";
 import ReportsPage from "@/pages/ReportsPage";
-import AppShell from "@/components/AppShell";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -27,7 +26,7 @@ export default function AppRouter() {
           path="/"
           element={
             <ProtectedRoute>
-              <AppShell />
+              <Outlet />
             </ProtectedRoute>
           }
         >
