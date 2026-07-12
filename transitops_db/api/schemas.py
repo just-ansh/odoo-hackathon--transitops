@@ -21,6 +21,12 @@ class LoginRequest(BaseModel):
     password: str = Field(..., min_length=6, description="Account password")
 
 
+class RegisterRequest(BaseModel):
+    email: str = Field(..., description="User email address to register")
+    password: str = Field(..., min_length=6, description="Account password")
+    role: str = Field(..., description="One of: 'Fleet Manager', 'Driver', 'Safety Officer', 'Financial Analyst'")
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

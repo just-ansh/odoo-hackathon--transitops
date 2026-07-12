@@ -16,9 +16,60 @@ from fastapi import APIRouter, Depends, HTTPException, status
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core import database, auth
-from api.schemas import LoginRequest, TokenResponse
+from api.schemas import LoginRequest, TokenResponse, RegisterRequest
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
+
+
+@router.post("/register")
+def register(payload: RegisterRequest):
+    """
+    Registers a new user account with a specified role.
+    """
+    valid_roles = ["Fleet Manager", "Driver", "Safety Officer", "Financial Analyst"]
+    if payload.role not in valid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
+        )
+
+    # Hash the password
+    password_hash = auth.hash_password(payload.password)
+
+    # Insert user record
+    with database.get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE email = %s", (payload.email,))
+            if cur.fetchone():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email already registered."
+                )
+            
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO users (email, password_hash, role)
+                    VALUES (%s, %s, %s)
+                    RETURNING id
+                    """,
+                    (payload.email, password_hash, payload.role)
+                )
+                user_id = cur.fetchone()["id"]
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Database error: {e}"
+                )
+
+    return {
+        "message": "User successfully registered.",
+        "user_id": user_id,
+        "email": payload.email,
+        "role": payload.role
+    }
 
 
 @router.post("/login", response_model=TokenResponse)

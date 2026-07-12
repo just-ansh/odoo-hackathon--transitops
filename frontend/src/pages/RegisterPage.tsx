@@ -1,20 +1,20 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { login } from "@/lib/api";
-import { useAuthStore } from "@/store/authStore";
+import { register } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Truck } from "lucide-react";
 import { toast } from "sonner";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState("Fleet Manager");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const setAuth = useAuthStore((s) => s.setAuth);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,19 +23,12 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await login(email, password);
-      const user = {
-        id: 1,
-        name: res.data.email.split("@")[0].toUpperCase(),
-        email: res.data.email,
-        role: res.data.role,
-      };
-      setAuth(res.data.access_token, user);
-      toast.success("Successfully logged in!");
-      navigate("/dashboard");
+      await register(email, password, role);
+      toast.success("Account created successfully! Please log in.");
+      navigate("/login");
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Login failed");
-      toast.error(err.response?.data?.detail || "Login failed");
+      setError(err.response?.data?.detail || "Registration failed");
+      toast.error(err.response?.data?.detail || "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -48,17 +41,17 @@ export default function LoginPage() {
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-xl shadow-indigo-500/20">
             <Truck className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">TransitOps Platform</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Create your Account</h1>
           <p className="text-sm text-slate-500">
-            Sign in to access your operations dashboard
+            Select a TransitOps role to test platform access rights
           </p>
         </div>
 
         <Card className="border-slate-200/70 dark:border-slate-800">
           <CardHeader>
-            <CardTitle>Login</CardTitle>
+            <CardTitle>Register</CardTitle>
             <CardDescription>
-              Enter your email and password to log in.
+              Create a new user credentials to test RBAC accessibility.
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
@@ -84,21 +77,35 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Enter your password"
+                  placeholder="Min. 6 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="role">Assigned Role</Label>
+                <Select value={role} onValueChange={setRole}>
+                  <SelectTrigger id="role">
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Fleet Manager">Fleet Manager (Full CRUD)</SelectItem>
+                    <SelectItem value="Driver">Driver (Trips Only)</SelectItem>
+                    <SelectItem value="Safety Officer">Safety Officer (Maintenance Only)</SelectItem>
+                    <SelectItem value="Financial Analyst">Financial Analyst (Expenses/Fuel Only)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Signing in..." : "Log in"}
+                {loading ? "Creating Account..." : "Register"}
               </Button>
               <div className="text-center text-xs text-slate-500">
-                Don't have an account?{" "}
-                <Link to="/register" className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">
-                  Register here
+                Already have an account?{" "}
+                <Link to="/login" className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+                  Sign in
                 </Link>
               </div>
             </CardFooter>

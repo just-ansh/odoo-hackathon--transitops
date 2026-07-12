@@ -30,6 +30,8 @@ api.interceptors.response.use(
 // ---------- AUTH ----------
 export const login = (email: string, password: string) =>
   api.post("/auth/login", { email, password });
+export const register = (email: string, password: string, role: string) =>
+  api.post("/auth/register", { email, password, role });
 
 // ---------- VEHICLES ----------
 export const getVehicles = (params?: { status?: string; type?: string }) =>
