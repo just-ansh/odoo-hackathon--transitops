@@ -28,7 +28,7 @@ const nav = [
 ] as const;
 
 import { api } from '@/lib/api';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export function AppShell({ children }: { children?: ReactNode }) {
   const user = useAuthStore((s) => s.user);
@@ -38,6 +38,8 @@ export function AppShell({ children }: { children?: ReactNode }) {
   const pathname = location.pathname;
   const { theme, setTheme } = useTheme();
 
+  const [healthStatus, setHealthStatus] = useState<'healthy' | 'warning' | 'offline'>('healthy');
+
   useEffect(() => {
     if (token) {
       api.get('/auth/me').catch(() => {
@@ -45,6 +47,25 @@ export function AppShell({ children }: { children?: ReactNode }) {
       });
     }
   }, [token, logout]);
+
+  useEffect(() => {
+    const checkHealth = () => {
+      api.get('/health')
+        .then((res) => {
+          if (res.data?.status === 'healthy') {
+            setHealthStatus('healthy');
+          } else {
+            setHealthStatus('warning');
+          }
+        })
+        .catch(() => {
+          setHealthStatus('offline');
+        });
+    };
+    checkHealth();
+    const interval = setInterval(checkHealth, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
@@ -102,7 +123,38 @@ export function AppShell({ children }: { children?: ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-slate-200/70 bg-white/70 px-4 backdrop-blur-xl sm:px-6 dark:border-slate-800 dark:bg-slate-950/60">
             <div className="min-w-0">
-              <div className="text-xs uppercase tracking-widest text-slate-500">TransitOps</div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs uppercase tracking-widest text-slate-500">TransitOps</div>
+                <div className="flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                  {healthStatus === 'healthy' && (
+                    <>
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                      </span>
+                      Live
+                    </>
+                  )}
+                  {healthStatus === 'warning' && (
+                    <>
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                      </span>
+                      DB Unavailable
+                    </>
+                  )}
+                  {healthStatus === 'offline' && (
+                    <>
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
+                      </span>
+                      Offline
+                    </>
+                  )}
+                </div>
+              </div>
               <div className="truncate text-lg font-semibold tracking-tight">
                 {nav.find((n) => ((n.to as string) === '/' ? pathname === '/' : pathname.startsWith(n.to)))?.label ??
                   'Overview'}
