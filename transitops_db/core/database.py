@@ -9,43 +9,41 @@ Author: Developer 1 (Senior Database Architect & Backend Engineer)
 
 import os
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.errors import UniqueViolation
 
 logger = logging.getLogger(__name__)
 
-# Configurable Connection String (Defaulting to local PostgreSQL)
 DEFAULT_CONN_STRING = "host=localhost dbname=transitops user=postgres password=postgres port=5432"
 CONN_STRING = os.getenv("DATABASE_URL", DEFAULT_CONN_STRING)
 
 
 # =====================================================================
-# CUSTOM EXCEPTIONS FOR TRANSACTION SAFETY
+# CUSTOM EXCEPTIONS
 # =====================================================================
 
 class TransitOpsDBError(Exception):
-    """Base exception for TransitOps database transaction errors."""
     pass
 
 class EntityNotFoundError(TransitOpsDBError):
-    """Raised when a vehicle, driver, or trip does not exist."""
     pass
 
 class ResourceUnavailableError(TransitOpsDBError):
-    """Raised when a vehicle or driver is not 'Available'."""
     pass
 
 class CapacityExceededError(TransitOpsDBError):
-    """Raised when cargo weight exceeds the vehicle's capacity."""
     pass
 
 class InvalidOdometerError(TransitOpsDBError):
-    """Raised when odometer values are invalid (e.g. going backward)."""
     pass
 
 class InvalidStatusTransitionError(TransitOpsDBError):
-    """Raised when completing a trip that is not currently 'Dispatched'."""
+    pass
+
+class DuplicateEntryError(TransitOpsDBError):
+    """Raised when a unique constraint is violated (e.g. duplicate registration number)."""
     pass
 
 
@@ -54,15 +52,206 @@ class InvalidStatusTransitionError(TransitOpsDBError):
 # =====================================================================
 
 def get_connection(conn_string: str = CONN_STRING) -> psycopg.Connection:
-    """
-    Establishes and returns an active psycopg connection.
-    Automatically registers dict_row globally so query outputs are dictionaries.
-    """
     try:
         return psycopg.connect(conn_string, row_factory=dict_row)
     except psycopg.Error as e:
         logger.error(f"Failed to connect to PostgreSQL: {e}")
         raise TransitOpsDBError(f"Database connection failed: {e}")
+
+
+# =====================================================================
+# LIST QUERIES — VEHICLES
+# =====================================================================
+
+def get_vehicles(
+    status: Optional[str] = None,
+    type: Optional[str] = None,
+    conn_string: str = CONN_STRING
+) -> List[Dict[str, Any]]:
+    """Returns all vehicles, with optional filtering by status and/or type."""
+    filters = []
+    params = []
+    if status:
+        filters.append("status = %s")
+        params.append(status)
+    if type:
+        filters.append("type = %s")
+        params.append(type)
+
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    query = f"""
+        SELECT id, registration_number, name_model, type, max_load_capacity,
+               odometer, acquisition_cost, status, created_at
+        FROM vehicles
+        {where}
+        ORDER BY id ASC
+    """
+    with get_connection(conn_string) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
+
+
+# =====================================================================
+# LIST QUERIES — DRIVERS
+# =====================================================================
+
+def get_drivers(
+    status: Optional[str] = None,
+    conn_string: str = CONN_STRING
+) -> List[Dict[str, Any]]:
+    """Returns all drivers, with optional filtering by status."""
+    filters = []
+    params = []
+    if status:
+        filters.append("status = %s")
+        params.append(status)
+
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    query = f"""
+        SELECT id, name, license_number, license_category, license_expiry_date,
+               contact_number, safety_score, status, created_at
+        FROM drivers
+        {where}
+        ORDER BY id ASC
+    """
+    with get_connection(conn_string) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
+
+
+# =====================================================================
+# LIST QUERIES — TRIPS
+# =====================================================================
+
+def get_trips(
+    status: Optional[str] = None,
+    vehicle_id: Optional[int] = None,
+    driver_id: Optional[int] = None,
+    conn_string: str = CONN_STRING
+) -> List[Dict[str, Any]]:
+    """Returns all trips, with optional filtering by status, vehicle_id, driver_id."""
+    filters = []
+    params = []
+    if status:
+        filters.append("status = %s")
+        params.append(status)
+    if vehicle_id:
+        filters.append("vehicle_id = %s")
+        params.append(vehicle_id)
+    if driver_id:
+        filters.append("driver_id = %s")
+        params.append(driver_id)
+
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    query = f"""
+        SELECT id, source, destination, vehicle_id, driver_id, cargo_weight,
+               planned_distance, final_odometer, fuel_consumed_liters, revenue, status, created_at
+        FROM trips
+        {where}
+        ORDER BY created_at DESC
+    """
+    with get_connection(conn_string) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
+
+
+# =====================================================================
+# LIST QUERIES — MAINTENANCE LOGS
+# =====================================================================
+
+def get_maintenance_logs(
+    vehicle_id: Optional[int] = None,
+    status: Optional[str] = None,
+    conn_string: str = CONN_STRING
+) -> List[Dict[str, Any]]:
+    """Returns all maintenance logs, with optional filtering by vehicle_id and/or status."""
+    filters = []
+    params = []
+    if vehicle_id:
+        filters.append("vehicle_id = %s")
+        params.append(vehicle_id)
+    if status:
+        filters.append("status = %s")
+        params.append(status)
+
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    query = f"""
+        SELECT id, vehicle_id, description, cost, status, logged_at, closed_at
+        FROM maintenance_logs
+        {where}
+        ORDER BY logged_at DESC
+    """
+    with get_connection(conn_string) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
+
+
+# =====================================================================
+# LIST QUERIES — FUEL LOGS
+# =====================================================================
+
+def get_fuel_logs(
+    vehicle_id: Optional[int] = None,
+    trip_id: Optional[int] = None,
+    conn_string: str = CONN_STRING
+) -> List[Dict[str, Any]]:
+    """Returns all fuel logs, with optional filtering by vehicle_id and/or trip_id."""
+    filters = []
+    params = []
+    if vehicle_id:
+        filters.append("vehicle_id = %s")
+        params.append(vehicle_id)
+    if trip_id:
+        filters.append("trip_id = %s")
+        params.append(trip_id)
+
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    query = f"""
+        SELECT id, vehicle_id, trip_id, liters, cost, logged_date
+        FROM fuel_logs
+        {where}
+        ORDER BY logged_date DESC
+    """
+    with get_connection(conn_string) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
+
+
+# =====================================================================
+# LIST QUERIES — EXPENSES
+# =====================================================================
+
+def get_expenses(
+    vehicle_id: Optional[int] = None,
+    type: Optional[str] = None,
+    conn_string: str = CONN_STRING
+) -> List[Dict[str, Any]]:
+    """Returns all expenses, with optional filtering by vehicle_id and/or type."""
+    filters = []
+    params = []
+    if vehicle_id:
+        filters.append("vehicle_id = %s")
+        params.append(vehicle_id)
+    if type:
+        filters.append("type = %s")
+        params.append(type)
+
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    query = f"""
+        SELECT id, vehicle_id, type, amount, description, logged_date
+        FROM expenses
+        {where}
+        ORDER BY logged_date DESC
+    """
+    with get_connection(conn_string) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
 
 
 # =====================================================================
@@ -80,16 +269,15 @@ def dispatch_trip(
     conn_string: str = CONN_STRING
 ) -> Dict[str, Any]:
     """
-    Dispatches a trip inside an atomic transaction.
-    1. Locks and validates vehicle (must exist, status == 'Available', capacity >= cargo_weight).
-    2. Locks and validates driver (must exist, status == 'Available').
-    3. Inserts the trip as 'Dispatched'.
-    4. Updates vehicle and driver status to 'On Trip' atomically.
+    Dispatches a trip atomically:
+    - Locks vehicle: validates 'Available' status and cargo capacity.
+    - Locks driver: validates 'Available' status.
+    - Inserts trip as 'Dispatched'.
+    - Sets both vehicle and driver to 'On Trip'.
     """
     with get_connection(conn_string) as conn:
         try:
             with conn.cursor() as cur:
-                # 1. Lock vehicle and check capacity/status
                 cur.execute(
                     "SELECT max_load_capacity, status FROM vehicles WHERE id = %s FOR UPDATE",
                     (vehicle_id,)
@@ -98,11 +286,14 @@ def dispatch_trip(
                 if not vehicle:
                     raise EntityNotFoundError(f"Vehicle {vehicle_id} not found.")
                 if vehicle["status"] != "Available":
-                    raise ResourceUnavailableError(f"Vehicle {vehicle_id} is '{vehicle['status']}', expected 'Available'.")
+                    raise ResourceUnavailableError(
+                        f"Vehicle {vehicle_id} is '{vehicle['status']}', expected 'Available'."
+                    )
                 if cargo_weight > float(vehicle["max_load_capacity"]):
-                    raise CapacityExceededError(f"Cargo weight {cargo_weight} exceeds vehicle capacity {vehicle['max_load_capacity']}.")
+                    raise CapacityExceededError(
+                        f"Cargo weight {cargo_weight}kg exceeds vehicle capacity {vehicle['max_load_capacity']}kg."
+                    )
 
-                # 2. Lock driver and check status
                 cur.execute(
                     "SELECT status FROM drivers WHERE id = %s FOR UPDATE",
                     (driver_id,)
@@ -111,26 +302,27 @@ def dispatch_trip(
                 if not driver:
                     raise EntityNotFoundError(f"Driver {driver_id} not found.")
                 if driver["status"] != "Available":
-                    raise ResourceUnavailableError(f"Driver {driver_id} is '{driver['status']}', expected 'Available'.")
+                    raise ResourceUnavailableError(
+                        f"Driver {driver_id} is '{driver['status']}', expected 'Available'."
+                    )
 
-                # 3. Create trip record
                 cur.execute(
                     """
-                    INSERT INTO trips (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status)
+                    INSERT INTO trips
+                        (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, 'Dispatched')
-                    RETURNING id, source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue, status, created_at
+                    RETURNING id, source, destination, vehicle_id, driver_id, cargo_weight,
+                              planned_distance, revenue, status, created_at
                     """,
                     (source, destination, vehicle_id, driver_id, cargo_weight, planned_distance, revenue)
                 )
                 trip = cur.fetchone()
 
-                # 4. Atomically update statuses
                 cur.execute("UPDATE vehicles SET status = 'On Trip' WHERE id = %s", (vehicle_id,))
                 cur.execute("UPDATE drivers SET status = 'On Trip' WHERE id = %s", (driver_id,))
-
                 conn.commit()
                 return trip
-        except Exception as e:
+        except Exception:
             conn.rollback()
             raise
 
@@ -142,22 +334,20 @@ def dispatch_trip(
 def complete_trip(
     trip_id: int,
     final_odometer: float,
-    fuel_consumed: float,
+    fuel_consumed_liters: float,
     conn_string: str = CONN_STRING
 ) -> Dict[str, Any]:
     """
-    Completes a trip inside an atomic transaction.
-    1. Locks and validates trip (must exist and status == 'Dispatched').
-    2. Locks and validates vehicle (must exist, final_odometer >= current odometer).
-    3. Locks and validates driver.
-    4. Updates trip to 'Completed' and records final odometer / fuel consumption.
-    5. Resets vehicle status to 'Available' and updates odometer.
-    6. Resets driver status to 'Available'.
+    Completes a dispatched trip atomically:
+    - Validates trip is 'Dispatched'.
+    - Validates final odometer >= current odometer.
+    - Updates trip to 'Completed', records final_odometer and fuel_consumed_liters.
+    - Restores vehicle odometer and status to 'Available'.
+    - Restores driver status to 'Available'.
     """
     with get_connection(conn_string) as conn:
         try:
             with conn.cursor() as cur:
-                # 1. Lock and check trip status
                 cur.execute(
                     "SELECT vehicle_id, driver_id, status FROM trips WHERE id = %s FOR UPDATE",
                     (trip_id,)
@@ -166,12 +356,13 @@ def complete_trip(
                 if not trip:
                     raise EntityNotFoundError(f"Trip {trip_id} not found.")
                 if trip["status"] != "Dispatched":
-                    raise InvalidStatusTransitionError(f"Trip {trip_id} status is '{trip['status']}', expected 'Dispatched'.")
+                    raise InvalidStatusTransitionError(
+                        f"Trip {trip_id} status is '{trip['status']}', expected 'Dispatched'."
+                    )
 
                 vehicle_id = trip["vehicle_id"]
                 driver_id = trip["driver_id"]
 
-                # 2. Lock and check vehicle odometer
                 cur.execute(
                     "SELECT odometer FROM vehicles WHERE id = %s FOR UPDATE",
                     (vehicle_id,)
@@ -180,37 +371,36 @@ def complete_trip(
                 if not vehicle:
                     raise EntityNotFoundError(f"Vehicle {vehicle_id} not found.")
                 if final_odometer < float(vehicle["odometer"]):
-                    raise InvalidOdometerError(f"Odometer cannot decrease from {vehicle['odometer']} to {final_odometer}.")
+                    raise InvalidOdometerError(
+                        f"Final odometer ({final_odometer}) cannot be less than current odometer ({vehicle['odometer']})."
+                    )
 
-                # 3. Lock driver
                 cur.execute("SELECT id FROM drivers WHERE id = %s FOR UPDATE", (driver_id,))
                 if not cur.fetchone():
                     raise EntityNotFoundError(f"Driver {driver_id} not found.")
 
-                # 4. Update trip details
                 cur.execute(
                     """
-                    UPDATE trips 
-                    SET status = 'Completed', final_odometer = %s, fuel_consumed_liters = %s
+                    UPDATE trips
+                    SET status = 'Completed',
+                        final_odometer = %s,
+                        fuel_consumed_liters = %s
                     WHERE id = %s
-                    RETURNING id, source, destination, vehicle_id, driver_id, final_odometer, fuel_consumed_liters, status
+                    RETURNING id, source, destination, vehicle_id, driver_id,
+                              final_odometer, fuel_consumed_liters, revenue, status, created_at
                     """,
-                    (final_odometer, fuel_consumed, trip_id)
+                    (final_odometer, fuel_consumed_liters, trip_id)
                 )
                 updated_trip = cur.fetchone()
 
-                # 5. Reset vehicle state & update odometer
                 cur.execute(
                     "UPDATE vehicles SET odometer = %s, status = 'Available' WHERE id = %s",
                     (final_odometer, vehicle_id)
                 )
-
-                # 6. Reset driver state
                 cur.execute("UPDATE drivers SET status = 'Available' WHERE id = %s", (driver_id,))
-
                 conn.commit()
                 return updated_trip
-        except Exception as e:
+        except Exception:
             conn.rollback()
             raise
 
@@ -225,26 +415,25 @@ def open_maintenance(
     conn_string: str = CONN_STRING
 ) -> Dict[str, Any]:
     """
-    Puts a vehicle in maintenance inside an atomic transaction.
-    1. Locks and validates vehicle (must exist, status != 'Retired').
-    2. Switches vehicle status to 'In Shop'.
-    3. Creates a new open maintenance log.
+    Opens a maintenance log atomically and sets vehicle status to 'In Shop'.
+    Vehicle must not be 'Retired'.
     """
     with get_connection(conn_string) as conn:
         try:
             with conn.cursor() as cur:
-                # 1. Lock and check vehicle
-                cur.execute("SELECT status FROM vehicles WHERE id = %s FOR UPDATE", (vehicle_id,))
+                cur.execute(
+                    "SELECT status FROM vehicles WHERE id = %s FOR UPDATE",
+                    (vehicle_id,)
+                )
                 vehicle = cur.fetchone()
                 if not vehicle:
                     raise EntityNotFoundError(f"Vehicle {vehicle_id} not found.")
                 if vehicle["status"] == "Retired":
-                    raise ResourceUnavailableError(f"Vehicle {vehicle_id} is retired and cannot be maintained.")
+                    raise ResourceUnavailableError(
+                        f"Vehicle {vehicle_id} is 'Retired' and cannot receive maintenance."
+                    )
 
-                # 2. Update vehicle status to 'In Shop'
                 cur.execute("UPDATE vehicles SET status = 'In Shop' WHERE id = %s", (vehicle_id,))
-
-                # 3. Create open maintenance log
                 cur.execute(
                     """
                     INSERT INTO maintenance_logs (vehicle_id, description, cost, status, logged_at)
@@ -254,36 +443,166 @@ def open_maintenance(
                     (vehicle_id, description)
                 )
                 log = cur.fetchone()
-
                 conn.commit()
                 return log
-        except Exception as e:
+        except Exception:
             conn.rollback()
             raise
 
 
 # =====================================================================
-# CORE AGGREGATE QUERY: GET FLEET ROI
+# CORE TRANSACTION: CLOSE MAINTENANCE
+# =====================================================================
+
+def close_maintenance(
+    log_id: int,
+    cost: float,
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    """
+    Closes an open maintenance log atomically:
+    - Validates the log exists and is 'Open'.
+    - Updates the log to 'Closed' with the final cost and closed_at timestamp.
+    - Restores vehicle status to 'Available'.
+    """
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT vehicle_id, status FROM maintenance_logs WHERE id = %s FOR UPDATE",
+                    (log_id,)
+                )
+                log = cur.fetchone()
+                if not log:
+                    raise EntityNotFoundError(f"Maintenance log {log_id} not found.")
+                if log["status"] != "Open":
+                    raise InvalidStatusTransitionError(
+                        f"Maintenance log {log_id} is already '{log['status']}', expected 'Open'."
+                    )
+
+                vehicle_id = log["vehicle_id"]
+
+                cur.execute(
+                    """
+                    UPDATE maintenance_logs
+                    SET status = 'Closed', cost = %s, closed_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    RETURNING id, vehicle_id, description, cost, status, logged_at, closed_at
+                    """,
+                    (cost, log_id)
+                )
+                updated_log = cur.fetchone()
+
+                cur.execute(
+                    "UPDATE vehicles SET status = 'Available' WHERE id = %s",
+                    (vehicle_id,)
+                )
+                conn.commit()
+                return updated_log
+        except Exception:
+            conn.rollback()
+            raise
+
+
+# =====================================================================
+# WRITE: ADD FUEL LOG
+# =====================================================================
+
+def add_fuel_log(
+    vehicle_id: int,
+    liters: float,
+    cost: float,
+    logged_date: str,
+    trip_id: Optional[int] = None,
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    """Inserts a new fuel log entry for a vehicle, optionally tied to a specific trip."""
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM vehicles WHERE id = %s", (vehicle_id,))
+                if not cur.fetchone():
+                    raise EntityNotFoundError(f"Vehicle {vehicle_id} not found.")
+
+                if trip_id:
+                    cur.execute("SELECT id FROM trips WHERE id = %s", (trip_id,))
+                    if not cur.fetchone():
+                        raise EntityNotFoundError(f"Trip {trip_id} not found.")
+
+                cur.execute(
+                    """
+                    INSERT INTO fuel_logs (vehicle_id, trip_id, liters, cost, logged_date)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id, vehicle_id, trip_id, liters, cost, logged_date
+                    """,
+                    (vehicle_id, trip_id, liters, cost, logged_date)
+                )
+                log = cur.fetchone()
+                conn.commit()
+                return log
+        except Exception:
+            conn.rollback()
+            raise
+
+
+# =====================================================================
+# WRITE: ADD EXPENSE
+# =====================================================================
+
+def add_expense(
+    vehicle_id: int,
+    type: str,
+    amount: float,
+    description: str,
+    logged_date: str,
+    conn_string: str = CONN_STRING
+) -> Dict[str, Any]:
+    """Inserts a new expense entry (Tolls, Maintenance, Other) for a vehicle."""
+    with get_connection(conn_string) as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id FROM vehicles WHERE id = %s", (vehicle_id,))
+                if not cur.fetchone():
+                    raise EntityNotFoundError(f"Vehicle {vehicle_id} not found.")
+
+                cur.execute(
+                    """
+                    INSERT INTO expenses (vehicle_id, type, amount, description, logged_date)
+                    VALUES (%s, %s, %s, %s, %s)
+                    RETURNING id, vehicle_id, type, amount, description, logged_date
+                    """,
+                    (vehicle_id, type, amount, description, logged_date)
+                )
+                expense = cur.fetchone()
+                conn.commit()
+                return expense
+        except Exception:
+            conn.rollback()
+            raise
+
+
+# =====================================================================
+# AGGREGATE QUERY: FLEET-WIDE ROI
 # =====================================================================
 
 def get_fleet_roi(conn_string: str = CONN_STRING) -> Dict[str, Any]:
     """
-    Calculates the aggregate fleet-wide ROI metric using a single raw SQL query:
-    ROI = [ (Revenue - (Sum of Maintenance Costs + Sum of Fuel Costs)) / Acquisition Cost ]
+    Returns a single aggregate row of fleet-wide ROI metrics.
+    ROI = (Revenue - (Maintenance Costs + Fuel Costs)) / Total Acquisition Cost
     """
     query = """
-        SELECT 
-            COALESCE(SUM(t.revenue), 0) AS total_revenue,
-            COALESCE((SELECT SUM(cost) FROM maintenance_logs), 0) AS total_maintenance_cost,
-            COALESCE((SELECT SUM(cost) FROM fuel_logs), 0) AS total_fuel_cost,
-            COALESCE((SELECT SUM(acquisition_cost) FROM vehicles), 0) AS total_acquisition_cost,
-            CASE 
+        SELECT
+            COALESCE(SUM(t.revenue), 0)                                   AS total_revenue,
+            COALESCE((SELECT SUM(cost) FROM maintenance_logs), 0)         AS total_maintenance_cost,
+            COALESCE((SELECT SUM(cost) FROM fuel_logs), 0)                AS total_fuel_cost,
+            COALESCE((SELECT SUM(acquisition_cost) FROM vehicles), 0)     AS total_acquisition_cost,
+            CASE
                 WHEN COALESCE((SELECT SUM(acquisition_cost) FROM vehicles), 0) = 0 THEN 0.0
                 ELSE ROUND(
                     (
-                        COALESCE(SUM(t.revenue), 0) - 
+                        COALESCE(SUM(t.revenue), 0) -
                         (
-                            COALESCE((SELECT SUM(cost) FROM maintenance_logs), 0) + 
+                            COALESCE((SELECT SUM(cost) FROM maintenance_logs), 0) +
                             COALESCE((SELECT SUM(cost) FROM fuel_logs), 0)
                         )
                     ) / COALESCE((SELECT SUM(acquisition_cost) FROM vehicles), 0),
@@ -297,10 +616,64 @@ def get_fleet_roi(conn_string: str = CONN_STRING) -> Dict[str, Any]:
         with conn.cursor() as cur:
             cur.execute(query)
             result = cur.fetchone()
-            return result if result else {
+            return result or {
                 "total_revenue": 0.0,
                 "total_maintenance_cost": 0.0,
                 "total_fuel_cost": 0.0,
                 "total_acquisition_cost": 0.0,
                 "fleet_roi": 0.0
             }
+
+
+# =====================================================================
+# AGGREGATE QUERY: PER-VEHICLE ROI BREAKDOWN
+# =====================================================================
+
+def get_vehicle_roi_breakdown(conn_string: str = CONN_STRING) -> List[Dict[str, Any]]:
+    """
+    Returns ROI metrics broken down per vehicle using pre-aggregated subqueries
+    to avoid cross-join row multiplication.
+    ROI = (Revenue - (Maintenance Costs + Fuel Costs)) / Acquisition Cost
+    """
+    query = """
+        SELECT
+            v.id                                        AS vehicle_id,
+            v.registration_number,
+            v.name_model,
+            v.type,
+            v.acquisition_cost,
+            COALESCE(r.total_revenue, 0)                AS total_revenue,
+            COALESCE(m.total_maintenance, 0)            AS total_maintenance_cost,
+            COALESCE(f.total_fuel, 0)                   AS total_fuel_cost,
+            CASE
+                WHEN v.acquisition_cost = 0 THEN 0.0
+                ELSE ROUND(
+                    (
+                        COALESCE(r.total_revenue, 0) -
+                        (COALESCE(m.total_maintenance, 0) + COALESCE(f.total_fuel, 0))
+                    ) / v.acquisition_cost,
+                    4
+                )
+            END AS roi
+        FROM vehicles v
+        LEFT JOIN (
+            SELECT vehicle_id, SUM(revenue) AS total_revenue
+            FROM trips WHERE status = 'Completed'
+            GROUP BY vehicle_id
+        ) r ON r.vehicle_id = v.id
+        LEFT JOIN (
+            SELECT vehicle_id, SUM(cost) AS total_maintenance
+            FROM maintenance_logs
+            GROUP BY vehicle_id
+        ) m ON m.vehicle_id = v.id
+        LEFT JOIN (
+            SELECT vehicle_id, SUM(cost) AS total_fuel
+            FROM fuel_logs
+            GROUP BY vehicle_id
+        ) f ON f.vehicle_id = v.id
+        ORDER BY roi DESC NULLS LAST, v.id ASC;
+    """
+    with get_connection(conn_string) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query)
+            return cur.fetchall()
